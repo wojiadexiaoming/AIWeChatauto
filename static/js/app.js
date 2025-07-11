@@ -1,19 +1,22 @@
-// 全局变量
-let currentArticle = null;
-let logEntries = [];
+/**
+ * 微信公众号AI发布系统 - 前端JavaScript
+ */
 
-// 工具函数
+// 工具类
 class Utils {
     static showToast(message, type = 'info') {
-        const toastContainer = document.getElementById('toast-container') || this.createToastContainer();
-        const toast = this.createToast(message, type);
-        toastContainer.appendChild(toast);
+        const toastContainer = document.getElementById('toast-container');
+        if (!toastContainer) {
+            Utils.createToastContainer();
+        }
         
-        // 显示toast
+        const toast = Utils.createToast(message, type);
+        document.getElementById('toast-container').appendChild(toast);
+        
         const bsToast = new bootstrap.Toast(toast);
         bsToast.show();
         
-        // 自动移除
+        // 自动移除toast元素
         toast.addEventListener('hidden.bs.toast', () => {
             toast.remove();
         });
@@ -23,86 +26,43 @@ class Utils {
         const container = document.createElement('div');
         container.id = 'toast-container';
         container.className = 'toast-container position-fixed top-0 end-0 p-3';
-        container.style.zIndex = '9999';
         document.body.appendChild(container);
-        return container;
     }
     
     static createToast(message, type) {
-        const iconMap = {
-            success: 'check-circle-fill',
-            error: 'exclamation-triangle-fill',
-            warning: 'exclamation-triangle-fill',
-            info: 'info-circle-fill'
+        const toastTypes = {
+            'success': 'text-bg-success',
+            'error': 'text-bg-danger', 
+            'warning': 'text-bg-warning',
+            'info': 'text-bg-info'
         };
         
-        const colorMap = {
-            success: 'text-success',
-            error: 'text-danger',
-            warning: 'text-warning',
-            info: 'text-info'
-        };
-        
-        const toast = document.createElement('div');
-        toast.className = 'toast';
-        toast.setAttribute('role', 'alert');
-        toast.innerHTML = `
+        const toastElement = document.createElement('div');
+        toastElement.className = `toast ${toastTypes[type] || toastTypes.info}`;
+        toastElement.setAttribute('role', 'alert');
+        toastElement.innerHTML = `
             <div class="toast-header">
-                <i class="bi bi-${iconMap[type]} ${colorMap[type]} me-2"></i>
-                <strong class="me-auto">系统通知</strong>
-                <small>${new Date().toLocaleTimeString()}</small>
+                <strong class="me-auto">系统提示</strong>
+                <small>刚刚</small>
                 <button type="button" class="btn-close" data-bs-dismiss="toast"></button>
             </div>
             <div class="toast-body">
                 ${message}
             </div>
         `;
-        return toast;
+        return toastElement;
     }
     
     static addLog(message, level = 'info') {
-        const timestamp = new Date().toLocaleString();
-        const logEntry = {
-            timestamp,
-            level,
-            message
-        };
-        
-        logEntries.unshift(logEntry);
-        
-        // 限制日志条数
-        if (logEntries.length > 100) {
-            logEntries = logEntries.slice(0, 100);
-        }
-        
-        console.log(`[${timestamp}] ${level.toUpperCase()}: ${message}`);
-        this.updateLogDisplay();
-    }
-    
-    static updateLogDisplay() {
-        const logContent = document.getElementById('log-content');
-        if (!logContent) return;
-        
-        if (logEntries.length === 0) {
-            logContent.innerHTML = '<div class="text-muted">暂无日志</div>';
-            return;
-        }
-        
-        const logHtml = logEntries.map(entry => `
-            <div class="log-entry">
-                <span class="log-time">[${entry.timestamp}]</span>
-                <span class="log-level-${entry.level}">${entry.level.toUpperCase()}:</span>
-                <span class="log-message">${entry.message}</span>
-            </div>
-        `).join('');
-        
-        logContent.innerHTML = logHtml;
+        const timestamp = new Date().toLocaleString('zh-CN');
+        const logEntry = `[${timestamp}] ${level.toUpperCase()}: ${message}`;
+        console.log(logEntry);
     }
     
     static formatFileSize(bytes) {
-        if (bytes === 0) return '0 Bytes';
+        if (bytes === 0) return '0 B';
         const k = 1024;
-        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+        const sizes = ['B', 'KB', 'MB', 'GB'];
         const i = Math.floor(Math.log(bytes) / Math.log(k));
         return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
     }
@@ -110,28 +70,27 @@ class Utils {
     static updateCurrentTime() {
         const timeElement = document.getElementById('current-time');
         if (timeElement) {
-            timeElement.textContent = new Date().toLocaleString();
+            const now = new Date();
+            timeElement.textContent = now.toLocaleTimeString('zh-CN');
         }
     }
 }
 
-// API请求类
+// API客户端类
 class ApiClient {
     static async request(url, options = {}) {
-        const defaultOptions = {
-            headers: {
-                'Content-Type': 'application/json',
-            }
-        };
-        
-        const config = { ...defaultOptions, ...options };
-        
         try {
-            const response = await fetch(url, config);
+            const defaultOptions = {
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+            };
+            
+            const response = await fetch(url, { ...defaultOptions, ...options });
             const data = await response.json();
             
             if (!response.ok) {
-                throw new Error(data.message || `HTTP error! status: ${response.status}`);
+                throw new Error(data.message || '请求失败');
             }
             
             return data;
@@ -148,359 +107,337 @@ class ApiClient {
     static async post(url, data) {
         return this.request(url, {
             method: 'POST',
-            body: JSON.stringify(data)
+            body: JSON.stringify(data),
         });
     }
 }
 
-// 配置管理
+// 配置管理类
 class ConfigManager {
     static async loadConfig() {
         try {
-            Utils.addLog('开始加载配置', 'info');
             const response = await ApiClient.get('/api/config');
-            
             if (response.success) {
-                const config = response.data;
-                this.fillConfigForm(config);
-                Utils.addLog('配置加载成功', 'success');
-                Utils.showToast('配置加载成功', 'success');
-            } else {
-                throw new Error(response.message);
+                this.fillConfigForm(response.data);
+                Utils.addLog('配置加载成功');
             }
         } catch (error) {
-            Utils.addLog(`配置加载失败: ${error.message}`, 'error');
-            Utils.showToast(`配置加载失败: ${error.message}`, 'error');
+            Utils.showToast('加载配置失败: ' + error.message, 'error');
         }
     }
     
     static async saveConfig() {
         try {
-            const formData = this.getConfigFormData();
-            
-            // 验证必填字段
-            const requiredFields = {
-                'wechat_appid': '微信AppID',
-                'wechat_appsecret': '微信AppSecret',
-                'gemini_api_key': 'Gemini API密钥'
-            };
-            
-            for (const [field, label] of Object.entries(requiredFields)) {
-                if (!formData[field] || formData[field].trim() === '') {
-                    throw new Error(`请填写${label}`);
-                }
-            }
-            
-            Utils.addLog('开始保存配置', 'info');
-            const response = await ApiClient.post('/api/config', formData);
+            const configData = this.getConfigFormData();
+            const response = await ApiClient.post('/api/config', configData);
             
             if (response.success) {
-                Utils.addLog('配置保存成功', 'success');
                 Utils.showToast('配置保存成功', 'success');
+                Utils.addLog('配置保存成功');
             } else {
-                throw new Error(response.message);
+                Utils.showToast('保存失败: ' + response.message, 'error');
             }
         } catch (error) {
-            Utils.addLog(`配置保存失败: ${error.message}`, 'error');
-            Utils.showToast(`配置保存失败: ${error.message}`, 'error');
+            Utils.showToast('保存配置失败: ' + error.message, 'error');
         }
     }
     
     static getConfigFormData() {
-        const form = document.getElementById('config-form');
-        const formData = new FormData(form);
-        const data = {};
-        
-        for (const [key, value] of formData.entries()) {
-            data[key] = value.trim();
-        }
-        
-        return data;
+        return {
+            wechat_appid: document.getElementById('wechat-appid')?.value || '',
+            wechat_appsecret: document.getElementById('wechat-appsecret')?.value || '',
+            gemini_api_key: document.getElementById('gemini-api-key')?.value || '',
+            gemini_model: document.getElementById('gemini-model')?.value || 'gemini-2.5-flash',
+            author: document.getElementById('author-name')?.value || 'AI笔记',
+            content_source_url: document.getElementById('content-source-url')?.value || ''
+        };
     }
     
     static fillConfigForm(config) {
-        const form = document.getElementById('config-form');
-        
-        for (const [key, value] of Object.entries(config)) {
-            const input = form.querySelector(`[name="${key}"]`);
-            if (input) {
-                input.value = value || '';
-            }
+        if (document.getElementById('wechat-appid')) {
+            document.getElementById('wechat-appid').value = config.wechat_appid || '';
+        }
+        if (document.getElementById('wechat-appsecret')) {
+            document.getElementById('wechat-appsecret').value = config.wechat_appsecret || '';
+        }
+        if (document.getElementById('gemini-api-key')) {
+            document.getElementById('gemini-api-key').value = config.gemini_api_key || '';
+        }
+        if (document.getElementById('gemini-model')) {
+            document.getElementById('gemini-model').value = config.gemini_model || 'gemini-2.5-flash';
+        }
+        if (document.getElementById('author-name')) {
+            document.getElementById('author-name').value = config.author || 'AI笔记';
+        }
+        if (document.getElementById('content-source-url')) {
+            document.getElementById('content-source-url').value = config.content_source_url || '';
         }
     }
     
     static async testWeChatConnection() {
         try {
-            const btn = document.getElementById('test-wechat-btn');
-            const originalText = btn.innerHTML;
-            
-            btn.disabled = true;
-            btn.innerHTML = '<i class="bi bi-arrow-repeat spin"></i> 测试中...';
-            
-            Utils.addLog('开始测试微信API连接', 'info');
             const response = await ApiClient.post('/api/test-wechat', {});
+            const statusElement = document.getElementById('wechat-status');
             
             if (response.success) {
-                Utils.addLog('微信API连接测试成功', 'success');
-                Utils.showToast('微信API连接成功', 'success');
+                Utils.showToast('微信连接测试成功', 'success');
+                if (statusElement) {
+                    statusElement.textContent = '连接正常';
+                    statusElement.className = 'badge bg-success';
+                }
             } else {
-                throw new Error(response.message);
+                Utils.showToast('微信连接测试失败: ' + response.message, 'error');
+                if (statusElement) {
+                    statusElement.textContent = '连接失败';
+                    statusElement.className = 'badge bg-danger';
+                }
             }
         } catch (error) {
-            Utils.addLog(`微信API连接测试失败: ${error.message}`, 'error');
-            Utils.showToast(`微信API连接测试失败: ${error.message}`, 'error');
-        } finally {
-            const btn = document.getElementById('test-wechat-btn');
-            btn.disabled = false;
-            btn.innerHTML = '<i class="bi bi-check-circle"></i> 测试微信连接';
+            Utils.showToast('测试连接失败: ' + error.message, 'error');
         }
     }
     
     static async testGeminiConnection() {
         try {
-            const btn = document.getElementById('test-gemini-btn');
-            const originalText = btn.innerHTML;
-            
-            btn.disabled = true;
-            btn.innerHTML = '<i class="bi bi-arrow-repeat spin"></i> 测试中...';
-            
-            Utils.addLog('开始测试Gemini AI连接', 'info');
             const response = await ApiClient.post('/api/test-gemini', {});
+            const statusElement = document.getElementById('gemini-status');
             
             if (response.success) {
-                Utils.addLog('Gemini AI连接测试成功', 'success');
-                Utils.showToast('Gemini AI连接成功', 'success');
+                Utils.showToast('Gemini连接测试成功', 'success');
+                if (statusElement) {
+                    statusElement.textContent = '连接正常';
+                    statusElement.className = 'badge bg-success';
+                }
             } else {
-                throw new Error(response.message);
+                Utils.showToast('Gemini连接测试失败: ' + response.message, 'error');
+                if (statusElement) {
+                    statusElement.textContent = '连接失败';
+                    statusElement.className = 'badge bg-danger';
+                }
             }
         } catch (error) {
-            Utils.addLog(`Gemini AI连接测试失败: ${error.message}`, 'error');
-            Utils.showToast(`Gemini AI连接测试失败: ${error.message}`, 'error');
-        } finally {
-            const btn = document.getElementById('test-gemini-btn');
-            btn.disabled = false;
-            btn.innerHTML = '<i class="bi bi-check-circle"></i> 测试AI连接';
+            Utils.showToast('测试连接失败: ' + error.message, 'error');
         }
     }
 }
 
-// 文章生成管理
+// 文章生成类
 class ArticleGenerator {
     static async generateArticle() {
+        const titleElement = document.getElementById('article-title');
+        if (!titleElement) {
+            Utils.showToast('页面元素未找到', 'error');
+            return;
+        }
+        
+        const title = titleElement.value.trim();
+        if (!title) {
+            Utils.showToast('请输入文章标题', 'warning');
+            return;
+        }
+        
         try {
-            const titleInput = document.getElementById('article-title');
-            const title = titleInput.value.trim();
-            
-            if (!title) {
-                Utils.showToast('请输入文章标题', 'warning');
-                titleInput.focus();
-                return;
-            }
-            
-            const btn = document.getElementById('generate-btn');
-            const originalText = btn.innerHTML;
-            
-            // 显示进度
             this.showGenerationProgress();
-            btn.disabled = true;
-            btn.innerHTML = '<i class="bi bi-arrow-repeat spin"></i> 生成中...';
-            
-            Utils.addLog(`开始生成文章: ${title}`, 'info');
-            
-            // 更新进度
-            this.updateProgress(20, '准备生成内容...');
+            Utils.addLog(`开始生成文章: ${title}`);
             
             const response = await ApiClient.post('/api/generate-article', { title });
             
             if (response.success) {
-                this.updateProgress(100, '生成完成');
-                
-                currentArticle = response.data;
-                this.showGenerationResult(response.data);
-                this.hideGenerationProgress();
-                
-                Utils.addLog('文章生成成功', 'success');
                 Utils.showToast('文章生成成功', 'success');
-                
-                // 自动切换到预览
-                setTimeout(() => {
-                    ArticlePreview.showPreview(response.data);
-                }, 1000);
-                
+                this.showGenerationResult(response.data);
+                ArticlePreview.showPreview(response.data);
+                Utils.addLog('文章生成完成');
             } else {
-                throw new Error(response.message);
+                Utils.showToast('生成失败: ' + response.message, 'error');
             }
-            
         } catch (error) {
-            this.hideGenerationProgress();
-            Utils.addLog(`文章生成失败: ${error.message}`, 'error');
-            Utils.showToast(`文章生成失败: ${error.message}`, 'error');
+            Utils.showToast('生成文章失败: ' + error.message, 'error');
         } finally {
-            const btn = document.getElementById('generate-btn');
-            btn.disabled = false;
-            btn.innerHTML = '<i class="bi bi-magic"></i> 生成文章';
+            this.hideGenerationProgress();
         }
     }
     
     static showGenerationProgress() {
-        document.getElementById('generation-result').classList.add('d-none');
-        document.getElementById('generation-progress').classList.remove('d-none');
-        this.updateProgress(0, '准备开始生成...');
+        const progressElement = document.getElementById('generation-progress');
+        if (progressElement) {
+            progressElement.style.display = 'block';
+            this.updateProgress(0, '开始生成...');
+            
+            // 模拟进度更新
+            let progress = 0;
+            const interval = setInterval(() => {
+                progress += Math.random() * 20;
+                if (progress >= 90) {
+                    clearInterval(interval);
+                    this.updateProgress(90, '即将完成...');
+                } else {
+                    this.updateProgress(progress, '正在生成内容...');
+                }
+            }, 500);
+        }
     }
     
     static hideGenerationProgress() {
-        document.getElementById('generation-progress').classList.add('d-none');
+        const progressElement = document.getElementById('generation-progress');
+        if (progressElement) {
+            this.updateProgress(100, '生成完成');
+            setTimeout(() => {
+                progressElement.style.display = 'none';
+            }, 1000);
+        }
     }
     
     static updateProgress(percent, text) {
-        const progressBar = document.querySelector('#generation-progress .progress-bar');
+        const progressBar = document.getElementById('progress-bar');
         const progressText = document.getElementById('progress-text');
         
         if (progressBar) {
-            progressBar.style.width = `${percent}%`;
+            progressBar.style.width = percent + '%';
         }
-        
         if (progressText) {
             progressText.textContent = text;
         }
     }
     
     static showGenerationResult(data) {
-        const resultDiv = document.getElementById('generation-result');
-        
-        document.getElementById('result-title').textContent = data.title;
-        document.getElementById('result-digest').textContent = data.digest || '无摘要';
-        document.getElementById('result-time').textContent = data.generated_at;
-        
-        const imageStatus = document.getElementById('result-image-status');
-        if (data.image_url) {
-            imageStatus.innerHTML = '<span class="text-success"><i class="bi bi-check-circle"></i> 已生成</span>';
-        } else {
-            imageStatus.innerHTML = '<span class="text-warning"><i class="bi bi-exclamation-triangle"></i> 未生成</span>';
+        // 更新历史记录
+        const historyList = document.getElementById('history-list');
+        if (historyList) {
+            const historyItem = document.createElement('div');
+            historyItem.className = 'history-item';
+            historyItem.innerHTML = `
+                <h6>${data.title}</h6>
+                <p>生成时间: ${data.generated_at} | 长度: ${data.content_length}字</p>
+            `;
+            
+            // 移除空状态
+            const emptyState = historyList.querySelector('.empty-state');
+            if (emptyState) {
+                emptyState.remove();
+            }
+            
+            historyList.insertBefore(historyItem, historyList.firstChild);
         }
         
-        resultDiv.classList.remove('d-none');
+        // 更新统计
+        const totalElement = document.getElementById('total-articles');
+        if (totalElement) {
+            const current = parseInt(totalElement.textContent) || 0;
+            totalElement.textContent = current + 1;
+        }
     }
 }
 
-// 文章预览管理
+// 文章预览类
 class ArticlePreview {
     static showPreview(article) {
-        if (!article) {
-            this.hidePreview();
-            return;
-        }
+        const previewElement = document.getElementById('article-preview');
+        if (!previewElement) return;
         
-        // 隐藏空状态
-        document.getElementById('empty-preview').classList.add('d-none');
-        
-        // 显示预览
-        const previewDiv = document.getElementById('article-preview');
-        previewDiv.classList.remove('d-none');
-        
-        // 填充内容
-        document.getElementById('preview-title').textContent = article.title;
-        document.getElementById('preview-digest').textContent = article.digest || '';
-        document.getElementById('preview-content').innerHTML = article.content || '';
-        
-        // 设置作者
-        const authorSpan = document.getElementById('preview-author');
-        const authorInput = document.getElementById('author');
-        authorSpan.textContent = authorInput.value || 'AI笔记';
-        
-        // 处理配图
-        const imageContainer = document.getElementById('preview-image-container');
-        const previewImage = document.getElementById('preview-image');
+        let previewHTML = `<h1>${article.title}</h1>`;
         
         if (article.image_url) {
-            previewImage.src = article.image_url;
-            imageContainer.classList.remove('d-none');
-        } else {
-            imageContainer.classList.add('d-none');
+            previewHTML += `<img src="${article.image_url}" alt="文章配图" style="max-width: 100%; margin-bottom: 1rem;">`;
         }
         
-        Utils.addLog('文章预览已更新', 'info');
+        if (article.digest) {
+            previewHTML += `<div class="alert alert-info"><strong>摘要：</strong>${article.digest}</div>`;
+        }
+        
+        previewHTML += article.content;
+        
+        previewElement.innerHTML = previewHTML;
+        
+        // 启用发布按钮
+        const publishBtn = document.getElementById('publish-article');
+        const draftBtn = document.getElementById('save-draft');
+        if (publishBtn) publishBtn.disabled = false;
+        if (draftBtn) draftBtn.disabled = false;
+        
+        // 存储文章数据
+        window.currentArticle = article;
     }
     
     static hidePreview() {
-        document.getElementById('article-preview').classList.add('d-none');
-        document.getElementById('empty-preview').classList.remove('d-none');
+        const previewElement = document.getElementById('article-preview');
+        if (previewElement) {
+            previewElement.innerHTML = `
+                <div class="empty-state">
+                    <i class="bi bi-file-earmark"></i>
+                    <h6>暂无预览内容</h6>
+                    <p>生成文章后将在这里显示预览</p>
+                </div>
+            `;
+        }
+        
+        const publishBtn = document.getElementById('publish-article');
+        const draftBtn = document.getElementById('save-draft');
+        if (publishBtn) publishBtn.disabled = true;
+        if (draftBtn) draftBtn.disabled = true;
+        
+        window.currentArticle = null;
     }
     
     static async publishArticle() {
-        if (!currentArticle) {
+        if (!window.currentArticle) {
             Utils.showToast('没有可发布的文章', 'warning');
             return;
         }
         
         try {
-            const btn = document.getElementById('publish-btn');
-            const originalText = btn.innerHTML;
-            
-            // 显示发布进度
             this.showPublishProgress('正在发布到微信公众号...');
-            btn.disabled = true;
-            btn.innerHTML = '<i class="bi bi-arrow-repeat spin"></i> 发布中...';
+            Utils.addLog(`开始发布文章: ${window.currentArticle.title}`);
             
-            Utils.addLog('开始发布文章到微信公众号', 'info');
-            
-            const response = await ApiClient.post('/api/publish-article', { 
-                article: currentArticle 
+            const response = await ApiClient.post('/api/publish-article', {
+                article: window.currentArticle
             });
             
             if (response.success) {
                 this.showPublishResult(response.data, 'success');
-                Utils.addLog('文章发布成功', 'success');
                 Utils.showToast('文章发布成功', 'success');
+                Utils.addLog('文章发布成功');
+                
+                // 更新已发布统计
+                const publishedElement = document.getElementById('published-articles');
+                if (publishedElement) {
+                    const current = parseInt(publishedElement.textContent) || 0;
+                    publishedElement.textContent = current + 1;
+                }
             } else {
-                throw new Error(response.message);
+                this.showPublishResult(response, 'error');
+                Utils.showToast('发布失败: ' + response.message, 'error');
             }
-            
         } catch (error) {
-            this.showPublishResult({ error: error.message }, 'error');
-            Utils.addLog(`文章发布失败: ${error.message}`, 'error');
-            Utils.showToast(`文章发布失败: ${error.message}`, 'error');
-        } finally {
-            const btn = document.getElementById('publish-btn');
-            btn.disabled = false;
-            btn.innerHTML = '<i class="bi bi-send-fill"></i> 发布到微信公众号';
+            this.showPublishResult({ message: error.message }, 'error');
+            Utils.showToast('发布文章失败: ' + error.message, 'error');
         }
     }
     
     static showPublishProgress(message) {
-        const statusDiv = document.getElementById('publish-status');
-        const progressDiv = document.getElementById('publish-progress');
-        const progressText = document.getElementById('publish-progress-text');
+        const statusElement = document.getElementById('publish-status');
+        const messageElement = document.getElementById('publish-message');
         
-        statusDiv.classList.remove('d-none');
-        progressDiv.classList.remove('d-none');
-        progressText.textContent = message;
-        
-        document.getElementById('publish-result').innerHTML = '';
+        if (statusElement) statusElement.style.display = 'block';
+        if (messageElement) messageElement.textContent = message;
     }
     
     static showPublishResult(data, type) {
-        const progressDiv = document.getElementById('publish-progress');
-        const resultDiv = document.getElementById('publish-result');
-        
-        progressDiv.classList.add('d-none');
-        
-        if (type === 'success') {
-            resultDiv.innerHTML = `
-                <div class="alert alert-success">
-                    <h6><i class="bi bi-check-circle"></i> 发布成功</h6>
-                    <p class="mb-1">文章已成功发布到微信公众号</p>
-                    ${data.publish_id ? `<small>发布ID: ${data.publish_id}</small>` : ''}
-                    ${data.msg_data_id ? `<br><small>消息ID: ${data.msg_data_id}</small>` : ''}
+        const statusElement = document.getElementById('publish-status');
+        if (statusElement) {
+            const alertClass = type === 'success' ? 'alert-success' : 'alert-danger';
+            const icon = type === 'success' ? 'bi-check-circle' : 'bi-x-circle';
+            
+            statusElement.innerHTML = `
+                <h6><i class="bi bi-info-circle"></i> 发布结果</h6>
+                <div class="alert ${alertClass}" role="alert">
+                    <i class="${icon}"></i>
+                    ${type === 'success' ? '发布成功' : '发布失败: ' + data.message}
                 </div>
             `;
-        } else {
-            resultDiv.innerHTML = `
-                <div class="alert alert-danger">
-                    <h6><i class="bi bi-exclamation-triangle"></i> 发布失败</h6>
-                    <p class="mb-0">${data.error || '发布过程中发生未知错误'}</p>
-                </div>
-            `;
+            
+            setTimeout(() => {
+                statusElement.style.display = 'none';
+            }, 5000);
         }
     }
 }
@@ -508,70 +445,60 @@ class ArticlePreview {
 // 主应用类
 class App {
     static init() {
-        this.bindEvents();
-        this.loadInitialConfig();
-        this.startTimeUpdate();
-        Utils.addLog('应用初始化完成', 'info');
+        try {
+            Utils.addLog('初始化微信公众号AI发布系统');
+            this.bindEvents();
+            this.loadInitialConfig();
+            this.startTimeUpdate();
+            Utils.addLog('系统初始化完成');
+        } catch (error) {
+            Utils.addLog('JavaScript错误: ' + error.message, 'error');
+            console.error('Global error:', error);
+        }
     }
     
     static bindEvents() {
-        // 配置表单事件
-        document.getElementById('config-form').addEventListener('submit', (e) => {
-            e.preventDefault();
-            ConfigManager.saveConfig();
-        });
+        // 配置相关事件
+        const saveConfigBtn = document.getElementById('save-config');
+        if (saveConfigBtn) {
+            saveConfigBtn.addEventListener('click', () => ConfigManager.saveConfig());
+        }
         
-        document.getElementById('load-config-btn').addEventListener('click', () => {
-            ConfigManager.loadConfig();
-        });
+        const testWeChatBtn = document.getElementById('test-wechat');
+        if (testWeChatBtn) {
+            testWeChatBtn.addEventListener('click', () => ConfigManager.testWeChatConnection());
+        }
         
-        document.getElementById('test-wechat-btn').addEventListener('click', () => {
-            ConfigManager.testWeChatConnection();
-        });
-        
-        document.getElementById('test-gemini-btn').addEventListener('click', () => {
-            ConfigManager.testGeminiConnection();
-        });
+        const testGeminiBtn = document.getElementById('test-gemini');
+        if (testGeminiBtn) {
+            testGeminiBtn.addEventListener('click', () => ConfigManager.testGeminiConnection());
+        }
         
         // 文章生成事件
-        document.getElementById('generate-form').addEventListener('submit', (e) => {
-            e.preventDefault();
-            ArticleGenerator.generateArticle();
-        });
+        const generateBtn = document.getElementById('generate-article');
+        if (generateBtn) {
+            generateBtn.addEventListener('click', () => ArticleGenerator.generateArticle());
+        }
         
-        document.getElementById('preview-article-btn').addEventListener('click', () => {
-            if (currentArticle) {
-                ArticlePreview.showPreview(currentArticle);
-            }
-        });
+        // 发布相关事件
+        const publishBtn = document.getElementById('publish-article');
+        if (publishBtn) {
+            publishBtn.addEventListener('click', () => ArticlePreview.publishArticle());
+        }
         
-        // 发布事件
-        document.getElementById('publish-btn').addEventListener('click', () => {
-            ArticlePreview.publishArticle();
-        });
-        
-        // 日志清空事件
-        document.getElementById('clear-log-btn').addEventListener('click', () => {
-            logEntries = [];
-            Utils.updateLogDisplay();
-            Utils.showToast('日志已清空', 'info');
-        });
-        
-        // 键盘快捷键
-        document.addEventListener('keydown', (e) => {
-            // Ctrl + Enter 快速生成文章
-            if (e.ctrlKey && e.key === 'Enter') {
-                e.preventDefault();
-                const titleInput = document.getElementById('article-title');
-                if (titleInput.value.trim()) {
+        // 表单回车事件
+        const titleInput = document.getElementById('article-title');
+        if (titleInput) {
+            titleInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
                     ArticleGenerator.generateArticle();
                 }
-            }
-        });
+            });
+        }
     }
     
-    static loadInitialConfig() {
-        ConfigManager.loadConfig();
+    static async loadInitialConfig() {
+        await ConfigManager.loadConfig();
     }
     
     static startTimeUpdate() {
@@ -582,18 +509,9 @@ class App {
     }
 }
 
-// 页面加载完成后初始化应用
-document.addEventListener('DOMContentLoaded', () => {
+// 页面加载完成后初始化
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => App.init());
+} else {
     App.init();
-});
-
-// 全局错误处理
-window.addEventListener('error', (e) => {
-    Utils.addLog(`JavaScript错误: ${e.message}`, 'error');
-    console.error('Global error:', e);
-});
-
-window.addEventListener('unhandledrejection', (e) => {
-    Utils.addLog(`未处理的Promise错误: ${e.reason}`, 'error');
-    console.error('Unhandled promise rejection:', e);
-});
+}
