@@ -92,17 +92,38 @@ class GeminiService:
 
 标题：{title}
 
-要求：
-1. 文章长度适中，约1000-1500字
-2. 内容要有深度和价值，不要空洞无物
-3. 结构清晰，包含引言、正文和结论
-4. 使用HTML格式，包含适当的标题标签（h2, h3）和段落标签（p）
-5. 语言生动有趣，适合微信公众号读者
-6. 内容要原创，有独特见解
-7. 适当使用项目符号或编号列表来增强可读性
-8. 避免使用过于专业的术语，保持通俗易懂
+创作要求：
+1. 首先分析这个标题，理解其含义和背景
+2. 如果可能，结合当前的行业趋势和最新发展
+3. 文章结构要清晰：引言 → 核心观点 → 案例分析 → 总结建议
+4. 内容深度：1200-1800字，有实际价值，避免空洞表述
+5. 语言风格：专业但易懂，适合公众号读者群体
+6. 必须使用HTML格式，合理使用以下标签：
+   - <h2>、<h3> 用于段落标题
+   - <p> 用于正文段落
+   - <ul>、<li> 用于要点列表
+   - <blockquote> 用于引用或重要观点
+   - <strong> 用于强调重要内容
 
-请直接输出HTML格式的文章内容，不要包含任何其他说明文字：
+文章结构参考：
+<h2>引言</h2>
+<p>开门见山，引出话题...</p>
+
+<h2>核心观点/分析</h2>
+<p>深入分析主题...</p>
+<ul>
+<li>要点一：具体阐述</li>
+<li>要点二：具体阐述</li>
+</ul>
+
+<h2>实际应用/案例</h2>
+<p>结合实际案例说明...</p>
+
+<h2>总结与展望</h2>
+<p>总结要点，提出建议...</p>
+
+请基于"{title}"这个主题，创作一篇结构完整、内容丰富的微信公众号文章。
+直接输出HTML格式的文章内容，不要包含其他说明文字：
 """
     
     def generate_digest(self, title: str, content: str, model: str = None) -> str:
@@ -211,3 +232,51 @@ class GeminiService:
             "gemini-2.5-pro",
             "gemini-2.0-flash-preview-image-generation"
         ]
+    
+    def _format_content_as_html(self, content: str) -> str:
+        """
+        将纯文本内容格式化为HTML
+        :param content: 纯文本内容
+        :return: HTML格式内容
+        """
+        try:
+            logger.info("正在将内容格式化为HTML")
+            
+            # 按行分割
+            lines = content.split('\n')
+            html_lines = []
+            
+            for line in lines:
+                line = line.strip()
+                if not line:
+                    continue
+                    
+                # 检测标题
+                if line.startswith('# '):
+                    html_lines.append(f'<h2>{line[2:]}</h2>')
+                elif line.startswith('## '):
+                    html_lines.append(f'<h3>{line[3:]}</h3>')
+                elif line.startswith('- '):
+                    # 简单的列表项处理
+                    if not html_lines or not html_lines[-1].startswith('<ul>'):
+                        html_lines.append('<ul>')
+                    html_lines.append(f'<li>{line[2:]}</li>')
+                else:
+                    # 关闭未关闭的列表
+                    if html_lines and html_lines[-1].startswith('<li>'):
+                        html_lines.append('</ul>')
+                    # 普通段落
+                    html_lines.append(f'<p>{line}</p>')
+            
+            # 关闭可能未关闭的列表
+            if html_lines and html_lines[-1].startswith('<li>'):
+                html_lines.append('</ul>')
+            
+            formatted_content = '\n'.join(html_lines)
+            logger.info("内容HTML格式化完成")
+            
+            return formatted_content
+            
+        except Exception as e:
+            logger.error(f"HTML格式化时发生错误: {str(e)}")
+            return f'<p>{content}</p>'  # fallback
