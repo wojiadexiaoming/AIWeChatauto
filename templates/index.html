@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>微信公众号AI发布系统</title>
+    
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
+    
+    <!-- 自定义CSS -->
+    <link href="{{ url_for('static', filename='css/layout.css') }}" rel="stylesheet">
+    <link href="{{ url_for('static', filename='css/components.css') }}" rel="stylesheet">
+</head>
+<body>
+    <!-- 导航栏 -->
+    <nav class="navbar navbar-expand-lg navbar-light">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="#">
+                <i class="bi bi-robot"></i>
+                微信公众号AI发布系统
+            </a>
+            <span class="navbar-text">
+                <i class="bi bi-clock"></i>
+                <span id="current-time">--:--:--</span>
+            </span>
+        </div>
+    </nav>
+
+    <!-- 主要内容区域 -->
+    <div class="container-fluid">
+        <div class="main-content">
+            <!-- 三列布局 -->
+            <div class="column-container">
+                
+                <!-- 第一列：配置管理 -->
+                <div class="column config-column">
+                    <div class="column-header">
+                        <i class="bi bi-gear"></i>
+                        <h5>配置管理</h5>
+                    </div>
+                    
+                    <!-- 微信配置 -->
+                    <div class="config-section">
+                        <h6><i class="bi bi-wechat"></i> 微信公众号配置</h6>
+                        <div class="mb-3">
+                            <label for="wechat-appid" class="form-label">AppID</label>
+                            <input type="text" class="form-control" id="wechat-appid" placeholder="请输入微信公众号AppID">
+                            <div class="form-text">以wx开头的18位字符串</div>
+                        </div>
+                        <div class="mb-3">
+                            <label for="wechat-appsecret" class="form-label">AppSecret</label>
+                            <input type="password" class="form-control" id="wechat-appsecret" placeholder="请输入微信公众号AppSecret">
+                            <div class="form-text">请妥善保管，不要泄露</div>
+                        </div>
+                        <div class="d-flex gap-2">
+                            <button type="button" class="btn btn-outline-primary btn-sm" id="test-wechat">
+                                <i class="bi bi-plug"></i> 测试连接
+                            </button>
+                            <span class="badge bg-secondary" id="wechat-status">未配置</span>
+                        </div>
+                    </div>
+                    
+                    <!-- Gemini配置 -->
+                    <div class="config-section">
+                        <h6><i class="bi bi-lightning"></i> Gemini AI配置</h6>
+                        <div class="mb-3">
+                            <label for="gemini-api-key" class="form-label">API密钥</label>
+                            <input type="password" class="form-control" id="gemini-api-key" placeholder="请输入Gemini API密钥">
+                            <div class="form-text">以AIza开头的API密钥</div>
+                        </div>
+                        <div class="mb-3">
+                            <label for="gemini-model" class="form-label">模型选择</label>
+                            <select class="form-select" id="gemini-model">
+                                <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
+                                <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
+                            </select>
+                        </div>
+                        <div class="d-flex gap-2">
+                            <button type="button" class="btn btn-outline-primary btn-sm" id="test-gemini">
+                                <i class="bi bi-plug"></i> 测试连接
+                            </button>
+                            <span class="badge bg-secondary" id="gemini-status">未配置</span>
+                        </div>
+                    </div>
+                    
+                    <!-- 作者配置 -->
+                    <div class="config-section">
+                        <h6><i class="bi bi-person"></i> 作者信息</h6>
+                        <div class="mb-3">
+                            <label for="author-name" class="form-label">作者名称</label>
+                            <input type="text" class="form-control" id="author-name" placeholder="请输入作者名称" value="AI笔记">
+                        </div>
+                        <div class="mb-3">
+                            <label for="content-source-url" class="form-label">原文链接</label>
+                            <input type="url" class="form-control" id="content-source-url" placeholder="可选，原文链接地址">
+                        </div>
+                    </div>
+                    
+                    <!-- 保存配置 -->
+                    <div class="d-grid">
+                        <button type="button" class="btn btn-primary" id="save-config">
+                            <i class="bi bi-save"></i> 保存配置
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- 第二列：文章生成 -->
+                <div class="column generate-column">
+                    <div class="column-header">
+                        <i class="bi bi-pencil-square"></i>
+                        <h5>文章生成</h5>
+                    </div>
+                    
+                    <!-- 文章标题输入 -->
+                    <div class="generate-section">
+                        <h6><i class="bi bi-textarea-t"></i> 文章标题</h6>
+                        <div class="mb-3">
+                            <input type="text" class="form-control" id="article-title" placeholder="请输入文章标题">
+                            <div class="form-text">输入一个吸引人的标题，AI将据此生成文章内容</div>
+                        </div>
+                        <div class="d-grid">
+                            <button type="button" class="btn btn-success" id="generate-article">
+                                <i class="bi bi-magic"></i> 生成文章
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- 生成进度 -->
+                    <div class="generate-section" id="generation-progress" style="display: none;">
+                        <h6><i class="bi bi-hourglass-split"></i> 生成进度</h6>
+                        <div class="mb-3">
+                            <div class="progress">
+                                <div class="progress-bar progress-bar-striped progress-bar-animated" 
+                                     role="progressbar" style="width: 0%" id="progress-bar"></div>
+                            </div>
+                            <small class="text-muted" id="progress-text">准备中...</small>
+                        </div>
+                    </div>
+                    
+                    <!-- 生成历史 -->
+                    <div class="generate-section">
+                        <h6><i class="bi bi-clock-history"></i> 历史记录</h6>
+                        <div class="history-list" id="history-list">
+                            <div class="empty-state">
+                                <i class="bi bi-journal-text"></i>
+                                <h6>暂无历史记录</h6>
+                                <p>生成的文章将在这里显示</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 生成统计 -->
+                    <div class="generate-section">
+                        <h6><i class="bi bi-graph-up"></i> 统计信息</h6>
+                        <div class="row g-2">
+                            <div class="col-6">
+                                <div class="card text-center">
+                                    <div class="card-body py-2">
+                                        <h6 class="card-title mb-0" id="total-articles">0</h6>
+                                        <small class="text-muted">生成文章</small>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="card text-center">
+                                    <div class="card-body py-2">
+                                        <h6 class="card-title mb-0" id="published-articles">0</h6>
+                                        <small class="text-muted">已发布</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 第三列：预览发布 -->
+                <div class="column preview-column">
+                    <div class="column-header">
+                        <i class="bi bi-eye"></i>
+                        <h5>预览发布</h5>
+                    </div>
+                    
+                    <!-- 文章预览 -->
+                    <div class="preview-section">
+                        <h6><i class="bi bi-file-earmark-text"></i> 文章预览</h6>
+                        <div class="article-preview-content" id="article-preview">
+                            <div class="empty-state">
+                                <i class="bi bi-file-earmark"></i>
+                                <h6>暂无预览内容</h6>
+                                <p>生成文章后将在这里显示预览</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 发布操作 -->
+                    <div class="preview-section">
+                        <h6><i class="bi bi-send"></i> 发布操作</h6>
+                        <div class="d-grid gap-2">
+                            <button type="button" class="btn btn-warning" id="publish-article" disabled>
+                                <i class="bi bi-cloud-upload"></i> 发布到微信
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary" id="save-draft" disabled>
+                                <i class="bi bi-save"></i> 保存草稿
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- 发布状态 -->
+                    <div class="preview-section" id="publish-status" style="display: none;">
+                        <h6><i class="bi bi-info-circle"></i> 发布状态</h6>
+                        <div class="alert alert-info" role="alert">
+                            <div class="d-flex align-items-center">
+                                <div class="loading-spinner me-2"></div>
+                                <span id="publish-message">正在发布...</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 发布历史 -->
+                    <div class="preview-section">
+                        <h6><i class="bi bi-list-check"></i> 发布历史</h6>
+                        <div class="history-list" id="publish-history">
+                            <div class="empty-state">
+                                <i class="bi bi-journal-check"></i>
+                                <h6>暂无发布记录</h6>
+                                <p>成功发布的文章将在这里显示</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 页脚 -->
+        <div class="footer">
+            <small>&copy; 2024 微信公众号AI发布系统 | 基于Flask和Gemini AI构建</small>
+        </div>
+    </div>
+
+    <!-- Toast 容器 -->
+    <div class="toast-container position-fixed top-0 end-0 p-3" id="toast-container">
+        <!-- Toast 消息将在这里显示 -->
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- 自定义JS -->
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+    
+    <!-- 初始化应用 -->
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            App.init();
+        });
+    </script>
+</body>
+</html>
