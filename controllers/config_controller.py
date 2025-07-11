@@ -75,28 +75,38 @@ class ConfigController:
         try:
             config_data = request.get_json()
             if not config_data:
+                logger.error("请求数据为空")
                 return {
                     'success': False,
                     'message': '请求数据为空'
                 }
             
             logger.info("开始保存配置")
-            logger.debug(f"配置数据字段: {list(config_data.keys())}")
+            logger.info(f"接收到的配置数据: {config_data}")
             
             # 验证必填字段
             validation_result = self._validate_config_data(config_data)
             if not validation_result['valid']:
+                logger.error(f"配置验证失败: {validation_result['message']}")
                 return {
                     'success': False,
                     'message': validation_result['message']
                 }
             
             # 保存配置
-            if self.config_service.save_config(config_data):
+            save_result = self.config_service.save_config(config_data)
+            logger.info(f"配置保存结果: {save_result}")
+            
+            if save_result:
+                # 验证保存是否成功
+                saved_config = self.config_service.load_config()
+                logger.info(f"保存后读取的配置: {saved_config}")
+                
                 logger.info("配置保存成功")
                 return {
                     'success': True,
-                    'message': '配置保存成功'
+                    'message': '配置保存成功',
+                    'data': saved_config
                 }
             else:
                 logger.error("配置保存失败")
@@ -106,7 +116,7 @@ class ConfigController:
                 }
                 
         except Exception as e:
-            logger.error(f"保存配置时发生错误: {str(e)}")
+            logger.error(f"保存配置时发生错误: {str(e)}", exc_info=True)
             return {
                 'success': False,
                 'message': f'保存配置失败: {str(e)}'
@@ -114,42 +124,45 @@ class ConfigController:
     
     def _validate_config_data(self, config_data: Dict[str, Any]) -> Dict[str, Any]:
         """验证配置数据"""
+        logger.info(f"开始验证配置数据: {config_data}")
+        
+        # 检查必填字段，但允许部分为空以支持分步配置
         required_fields = {
             'wechat_appid': '微信AppID',
-            'wechat_appsecret': '微信AppSecret',
+            'wechat_appsecret': '微信AppSecret', 
             'gemini_api_key': 'Gemini API密钥'
         }
         
+        # 只验证存在且非空的字段
         for field, label in required_fields.items():
-            if field not in config_data:
-                return {
-                    'valid': False,
-                    'message': f'缺少必填字段: {label}'
-                }
-            
-            value = config_data[field]
-            if not isinstance(value, str) or not value.strip():
-                return {
-                    'valid': False,
-                    'message': f'{label}不能为空'
-                }
+            if field in config_data and config_data[field]:
+                value = config_data[field]
+                if not isinstance(value, str) or not value.strip():
+                    logger.error(f"字段 {field} 值无效: {value}")
+                    return {
+                        'valid': False,
+                        'message': f'{label}格式错误'
+                    }
+                
+                # 验证微信AppID格式（如果提供）
+                if field == 'wechat_appid':
+                    wechat_appid = value.strip()
+                    if not wechat_appid.startswith('wx') or len(wechat_appid) != 18:
+                        return {
+                            'valid': False,
+                            'message': '微信AppID格式不正确，应为wx开头的18位字符'
+                        }
+                
+                # 验证Gemini API密钥格式（如果提供）
+                if field == 'gemini_api_key':
+                    gemini_api_key = value.strip()
+                    if not gemini_api_key.startswith('AIza'):
+                        return {
+                            'valid': False,
+                            'message': 'Gemini API密钥格式不正确，应以AIza开头'
+                        }
         
-        # 验证微信AppID格式
-        wechat_appid = config_data['wechat_appid'].strip()
-        if not wechat_appid.startswith('wx') or len(wechat_appid) != 18:
-            return {
-                'valid': False,
-                'message': '微信AppID格式不正确，应为wx开头的18位字符'
-            }
-        
-        # 验证Gemini API密钥格式
-        gemini_api_key = config_data['gemini_api_key'].strip()
-        if not gemini_api_key.startswith('AIza'):
-            return {
-                'valid': False,
-                'message': 'Gemini API密钥格式不正确，应以AIza开头'
-            }
-        
+        logger.info("配置数据验证通过")
         return {'valid': True}
     
     def test_wechat_connection(self) -> Dict[str, Any]:
@@ -157,11 +170,23 @@ class ConfigController:
         try:
             logger.info("开始测试微信API连接")
             
+            # 获取当前配置
+            config = self.config_service.load_config()
+            logger.info(f"当前完整配置: {config}")
+            
             wechat_config = self.config_service.get_wechat_config()
+            logger.info(f"微信配置: appid={wechat_config.get('appid', 'None')[:10]}..., appsecret={'已设置' if wechat_config.get('appsecret') else '未设置'}")
+            
             if not wechat_config['appid'] or not wechat_config['appsecret']:
+                logger.error(f"微信配置不完整: appid={bool(wechat_config.get('appid'))}, appsecret={bool(wechat_config.get('appsecret'))}")
                 return {
                     'success': False,
-                    'message': '请先配置微信公众号信息'
+                    'message': '请先配置微信公众号信息',
+                    'debug_info': {
+                        'has_appid': bool(wechat_config.get('appid')),
+                        'has_appsecret': bool(wechat_config.get('appsecret')),
+                        'config_keys': list(config.keys())
+                    }
                 }
             
             result = self.wechat_service.test_connection(
@@ -169,11 +194,11 @@ class ConfigController:
                 wechat_config['appsecret']
             )
             
-            logger.info(f"微信连接测试结果: {result['success']}")
+            logger.info(f"微信连接测试完整结果: {result}")
             return result
             
         except Exception as e:
-            logger.error(f"测试微信连接时发生错误: {str(e)}")
+            logger.error(f"测试微信连接时发生错误: {str(e)}", exc_info=True)
             return {
                 'success': False,
                 'message': f'测试失败: {str(e)}'
@@ -184,11 +209,22 @@ class ConfigController:
         try:
             logger.info("开始测试Gemini AI连接")
             
+            # 获取当前配置
+            config = self.config_service.load_config()
+            logger.info(f"当前完整配置: {config}")
+            
             gemini_config = self.config_service.get_gemini_config()
+            logger.info(f"Gemini配置: api_key={'已设置' if gemini_config.get('api_key') else '未设置'}, model={gemini_config.get('model', 'None')}")
+            
             if not gemini_config['api_key']:
+                logger.error(f"Gemini API密钥未配置")
                 return {
                     'success': False,
-                    'message': '请先配置Gemini API密钥'
+                    'message': '请先配置Gemini API密钥',
+                    'debug_info': {
+                        'has_api_key': bool(gemini_config.get('api_key')),
+                        'config_keys': list(config.keys())
+                    }
                 }
             
             # 设置API密钥
@@ -196,11 +232,11 @@ class ConfigController:
             
             result = self.gemini_service.test_connection(gemini_config['model'])
             
-            logger.info(f"Gemini连接测试结果: {result['success']}")
+            logger.info(f"Gemini连接测试完整结果: {result}")
             return result
             
         except Exception as e:
-            logger.error(f"测试Gemini连接时发生错误: {str(e)}")
+            logger.error(f"测试Gemini连接时发生错误: {str(e)}", exc_info=True)
             return {
                 'success': False,
                 'message': f'测试失败: {str(e)}'

@@ -129,16 +129,27 @@ class ConfigManager {
     static async saveConfig() {
         try {
             const configData = this.getConfigFormData();
+            Utils.addLog(`准备保存配置: ${JSON.stringify(configData)}`);
+            console.log('配置数据:', configData);
+            
             const response = await ApiClient.post('/api/config', configData);
+            console.log('保存响应:', response);
             
             if (response.success) {
                 Utils.showToast('配置保存成功', 'success');
                 Utils.addLog('配置保存成功');
+                
+                // 重新加载配置以确认保存成功
+                await this.loadConfig();
             } else {
                 Utils.showToast('保存失败: ' + response.message, 'error');
+                Utils.addLog(`保存失败: ${response.message}`, 'error');
+                console.error('保存失败:', response);
             }
         } catch (error) {
             Utils.showToast('保存配置失败: ' + error.message, 'error');
+            Utils.addLog(`保存配置异常: ${error.message}`, 'error');
+            console.error('保存配置异常:', error);
         }
     }
     
@@ -176,7 +187,13 @@ class ConfigManager {
     
     static async testWeChatConnection() {
         try {
+            Utils.addLog('开始测试微信连接');
+            console.log('测试微信连接...');
+            
             const response = await ApiClient.post('/api/test-wechat', {});
+            console.log('微信测试响应:', response);
+            Utils.addLog(`微信测试响应: ${JSON.stringify(response)}`);
+            
             const statusElement = document.getElementById('wechat-status');
             
             if (response.success) {
@@ -191,15 +208,28 @@ class ConfigManager {
                     statusElement.textContent = '连接失败';
                     statusElement.className = 'badge bg-danger';
                 }
+                // 打印调试信息
+                if (response.debug_info) {
+                    console.log('调试信息:', response.debug_info);
+                    Utils.addLog(`调试信息: ${JSON.stringify(response.debug_info)}`);
+                }
             }
         } catch (error) {
             Utils.showToast('测试连接失败: ' + error.message, 'error');
+            Utils.addLog(`微信测试异常: ${error.message}`, 'error');
+            console.error('微信测试异常:', error);
         }
     }
     
     static async testGeminiConnection() {
         try {
+            Utils.addLog('开始测试Gemini连接');
+            console.log('测试Gemini连接...');
+            
             const response = await ApiClient.post('/api/test-gemini', {});
+            console.log('Gemini测试响应:', response);
+            Utils.addLog(`Gemini测试响应: ${JSON.stringify(response)}`);
+            
             const statusElement = document.getElementById('gemini-status');
             
             if (response.success) {
@@ -214,9 +244,16 @@ class ConfigManager {
                     statusElement.textContent = '连接失败';
                     statusElement.className = 'badge bg-danger';
                 }
+                // 打印调试信息
+                if (response.debug_info) {
+                    console.log('调试信息:', response.debug_info);
+                    Utils.addLog(`调试信息: ${JSON.stringify(response.debug_info)}`);
+                }
             }
         } catch (error) {
             Utils.showToast('测试连接失败: ' + error.message, 'error');
+            Utils.addLog(`Gemini测试异常: ${error.message}`, 'error');
+            console.error('Gemini测试异常:', error);
         }
     }
 }
