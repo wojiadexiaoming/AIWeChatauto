@@ -174,7 +174,18 @@ class ArticleController:
 
             # 第四步：生成配图并插入
             logger.info("第四步：开始生成和插入配图")
-            processed_content = self._process_images_in_content(content, title, digest, image_count, image_model, ai_model)
+            custom_image_prompt = data.get('custom_image_prompt', '').strip()
+            dashscope_image_model_code = data.get('dashscope_image_model_code', '').strip()
+            if image_model == 'dashscope' and dashscope_image_model_code:
+                image_model_code = dashscope_image_model_code
+            else:
+                image_model_code = image_model
+            # 后续传递 image_model_code 给图片生成逻辑
+            dashscope_params = data.get('dashscope_params', {})
+            content_with_images = self._process_images_in_content(
+                content, title, digest, image_count, image_model_code, ai_model, custom_image_prompt,
+                dashscope_params=dashscope_params, dashscope_image_model_code=dashscope_image_model_code
+            )
             
             # 第四点五步：输出原始文章内容到cache文件夹，便于对比
             try:
@@ -187,14 +198,14 @@ class ArticleController:
                     os.makedirs(cache_dir)
                 raw_file_path = os.path.join(cache_dir, f"article_raw_{safe_title}_{timestamp}.html")
                 with open(raw_file_path, 'w', encoding='utf-8') as f:
-                    f.write(processed_content)
+                    f.write(content_with_images)
                 logger.info(f"原始文章内容已保存到: {raw_file_path}")
             except Exception as e:
                 logger.error(f"保存原始文章内容到cache失败: {str(e)}")
 
             # 第五步：清理AI生成内容中的多余部分
             logger.info("第五步：开始清理内容中的多余部分")
-            processed_content = self._clean_ai_generated_content(processed_content)
+            processed_content = self._clean_ai_generated_content(content_with_images)
             
             # 限制最终HTML内容不超过2万字符
             max_chars = 20000
@@ -529,7 +540,7 @@ class ArticleController:
                 'message': f'获取预览失败: {str(e)}'
             }
     
-    def _process_images_in_content(self, content: str, title: str, description: str, image_count: int, image_model: str = "gemini", ai_model: str = "gemini") -> str:
+    def _process_images_in_content(self, content: str, title: str, description: str, image_count: int, image_model: str = "gemini", ai_model: str = "gemini", custom_image_prompt: str = "", dashscope_params: dict = None, dashscope_image_model_code: str = "") -> str:
         """
         在文章内容中处理配图：生成图片并插入到合适位置，仅插入本地图片路径，不上传到公众号平台。
         :param content: 原始文章内容
@@ -538,6 +549,7 @@ class ArticleController:
         :param image_count: 配图数量
         :param image_model: 生图模型
         :param ai_model: AI模型（用于Pexels搜索提示词生成）
+        :param custom_image_prompt: 自定义图片提示词
         :return: 插入配图后的内容
         """
         try:
@@ -553,11 +565,30 @@ class ArticleController:
                 insert_positions = [round((i + 1) * total_paragraphs / (image_count + 1)) for i in range(image_count)]
             logger.info(f"计划在第{insert_positions}段后插入配图")
             generated_images = []
+            if dashscope_params is None:
+                dashscope_params = {}
             for i, position in enumerate(insert_positions):
                 try:
                     logger.info(f"生成第{i+1}张配图，使用模型: {image_model}")
-                    image_prompt = f"{title} - 配图{i+1}"
-                    image_path = self.image_service.generate_article_image(image_prompt, description, image_model, content, ai_model, i+1, image_count)
+                    user_custom_prompt = custom_image_prompt
+                    # dashscope模型ID优先用dashscope_params['model_name']，否则用dashscope_image_model_code
+                    if image_model == 'dashscope':
+                        if not dashscope_params.get('model_name') and dashscope_image_model_code:
+                            dashscope_params['model_name'] = dashscope_image_model_code
+                        if not dashscope_params.get('model_name'):
+                            logger.error("阿里云百炼模型ID未传递")
+                            return content
+                    image_path = self.image_service.generate_article_image(
+                        title=title,
+                        description=description,
+                        image_model=image_model,
+                        article_content=content,
+                        ai_model=ai_model,
+                        image_index=i+1,
+                        total_images=image_count,
+                        dashscope_params=dashscope_params,
+                        user_custom_prompt=user_custom_prompt
+                    )
                     if image_path:
                         image_html = f'<img src="{image_path}" alt="文章配图" style="max-width: 100%; height: auto;">'
                         logger.info(f"第{i+1}张配图处理完成，使用本地路径: {image_path}")
@@ -819,3 +850,34 @@ class ArticleController:
         # 转换为样式字符串
         style_parts = [f"{key}: {value}" for key, value in merged_props.items()]
         return '; '.join(style_parts)
+
+    def get_local_version(self):
+        """
+        获取本地代码的git commit sha
+        """
+        import subprocess
+        try:
+            sha = subprocess.check_output(['git', 'rev-parse', 'HEAD']).decode('utf-8').strip()
+            return {'success': True, 'sha': sha}
+        except Exception as e:
+            logger.error(f"获取本地版本失败: {e}")
+            return {'success': False, 'message': str(e)}
+
+    def update_from_github(self):
+        """
+        自动拉取GitHub主分支最新代码
+        """
+        import subprocess
+        try:
+            # 检查本地是否有未提交或未推送的更改
+            status_output = subprocess.check_output(['git', 'status', '--porcelain']).decode('utf-8').strip()
+            if status_output:
+                return {'success': False, 'message': '检测到本地有未提交的更改，请先处理后再更新。', 'needs_confirm': True}
+
+            # 拉取最新代码
+            pull = subprocess.check_output(['git', 'pull', 'origin', 'main']).decode('utf-8').strip()
+            # 可选：重启服务（如需）
+            return {'success': True, 'message': pull}
+        except Exception as e:
+            logger.error(f"自动更新失败: {e}")
+            return {'success': False, 'message': str(e)}

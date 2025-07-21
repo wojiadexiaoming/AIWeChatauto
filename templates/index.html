@@ -13,6 +13,24 @@
     <!-- 自定义CSS -->
     <link href="{{ url_for('static', filename='css/layout.css') }}" rel="stylesheet">
     <link href="{{ url_for('static', filename='css/components.css') }}" rel="stylesheet">
+    <style>
+  .option-badge {
+    position: relative;
+    padding-right: 40px;
+  }
+  .badge-free {
+    position: absolute;
+    top: 6px;
+    right: 8px;
+    background: #ff9800;
+    color: #fff;
+    font-size: 12px;
+    border-radius: 8px;
+    padding: 2px 6px;
+    z-index: 2;
+    pointer-events: none;
+  }
+</style>
 </head>
 <body>
     <!-- 导航栏 -->
@@ -26,6 +44,15 @@
                 <i class="bi bi-clock"></i>
                 <span id="current-time">--:--:--</span>
             </span>
+            <div class="ms-auto d-flex align-items-center">
+                <a href="https://github.com/wojiadexiaoming/AIWeChatauto" target="_blank" class="btn btn-outline-dark btn-sm ms-3" style="display:flex;align-items:center;gap:4px;">
+                    <i class="bi bi-github"></i> 开源项目
+                    <span id="github-star-count" style="margin-left:6px;"><i class="bi bi-star"></i> <span id="star-num">--</span></span>
+                </a>
+                <button id="check-update-btn" class="btn btn-outline-info btn-sm ms-2" style="display:flex;align-items:center;gap:4px;" title="检查并自动更新到最新版本">
+                    <i class="bi bi-arrow-repeat"></i> 检查更新
+                </button>
+            </div>
         </div>
     </nav>
 
@@ -174,6 +201,29 @@
                             <span class="badge bg-secondary" id="pexels-status">未配置</span>
                         </div>
                     </div>
+                    <!-- Coze配置 -->
+                    <div class="config-section">
+                        <h6><i class="bi bi-diagram-3"></i> Coze工作流配置</h6>
+                        <div class="mb-3 row">
+                            <label for="coze_token" class="col-sm-2 col-form-label">Coze令牌</label>
+                            <div class="col-sm-10">
+                                <input type="password" class="form-control" id="coze_token" name="coze_token" placeholder="请输入Coze令牌">
+                                <!-- <input type="text" class="form-control" id="coze_token" name="coze_token" placeholder="请输入Coze令牌"> -->
+                            </div>
+                        </div>
+                        <div class="mb-3 row">
+                            <label for="coze_workflow_id" class="col-sm-2 col-form-label">Coze工作流ID</label>
+                            <div class="col-sm-10">
+                                <input type="text" class="form-control" id="coze_workflow_id" name="coze_workflow_id" placeholder="请输入Coze工作流ID">
+                            </div>
+                        </div>
+                        <!-- 新增Coze工作流部署提示及一键复制JSON参数 -->
+                        <div class="alert alert-info" style="font-size: 15px;">
+                            <i class="bi bi-info-circle"></i>
+                            请将工作流部署到自己的Coze空间：
+                            <a href="#" id="coze-space-link" data-json='{"type":"coze-workflow-clipboard-data","source":{"workflowId":"7526742102417915919","flowMode":0,"spaceId":"7371639667240124479","isDouyin":false,"host":"www.coze.cn"},"json":{"nodes":[{"id":"115697","type":"16","meta":{"position":{"x":394.27487466970626,"y":-31.68505321549455}},"data":{"inputs":{"apiParam":null,"inputParameters":[{"name":"title","input":{"type":"string","value":{"type":"ref","content":{"source":"block-output","blockID":"100001","name":"title"},"rawMeta":{"type":1}}}}],"modelSetting":{"custom_ratio":{"height":768,"width":1024},"ddim_steps":25,"images_reference":{},"model":1,"ratio":0},"prompt":{"negative_prompt":"","prompt":"{{title}}"},"references":[],"settingOnError":{"processType":1,"timeoutMs":60000,"retryTimes":0}},"nodeMeta":{"description":"通过文字描述/添加参考图生成图片","icon":"https://lf3-static.bytednsdoc.com/obj/eden-cn/dvsmryvd_avi_dvsm/ljhwZthlaukjlkulzlp/icon/icon-ImageGeneration-v2.jpg","title":"图像生成","subTitle":"图像生成"},"outputs":[{"type":"string","assistType":2,"name":"data","required":false},{"type":"string","name":"msg","required":false}],"settings":null,"version":""},"_temp":{"bounds":{"x":214.27487466970626,"y":-31.68505321549455,"width":360,"height":163.7},"externalData":{"icon":"https://lf3-static.bytednsdoc.com/obj/eden-cn/dvsmryvd_avi_dvsm/ljhwZthlaukjlkulzlp/icon/icon-ImageGeneration-v2.jpg","description":"通过文字描述/添加参考图生成图片","title":"图像生成","mainColor":"#FF4DC3"}}}],"edges":[]},"bounds":{"x":214.27487466970626,"y":-31.68505321549455,"width":360,"height":163.7}}'>https://www.coze.cn/space <i class="bi bi-box-arrow-up-right"></i> 复制工作流自动跳转</a>
+                        </div>
+                    </div>
                     
                     <!-- 作者配置 -->
                     <div class="config-section">
@@ -222,13 +272,78 @@
                         </div>
                         <div class="mb-3">
                             <label for="image-model-select" class="form-label">生图模型选择</label>
-                            <select class="form-select" id="image-model-select">
-                                <option value="gemini">Google Gemini</option>
-                                <option value="deepseek">DeepSeek AI</option>
+                            <div class="d-flex gap-2 align-items-center">
+                            <select class="form-select" id="image-model-select" style="max-width:180px;">
+                                    <option value="gemini">Gemini</option>
+                                    <option value="deepseek">DeepSeek</option>
                                 <option value="dashscope">阿里云百炼</option>
-                                <option value="pexels">Pexels图片搜索</option>
+                                    <option value="pexels">Pexels</option>
+                                    <option value="coze">Coze</option>
                             </select>
-                            <div class="form-text">选择用于生成文章配图的AI模型或图片搜索服务</div>
+                                <input type="text" class="form-control" id="custom-image-prompt" placeholder="自定义生图提示词（可选）" style="max-width:220px;">
+                                <div style="flex:1;min-width:260px;">
+                                    <div class="dropdown" id="dashscope-image-model-dropdown" style="display:none;max-width:260px;">
+                                        <button class="btn btn-outline-secondary dropdown-toggle w-100" type="button" id="dashscopeImageModelBtn" data-bs-toggle="dropdown" aria-expanded="false">
+                                            请选择阿里云百炼生图模型
+                                        </button>
+                                        <ul class="dropdown-menu dropdown-menu-end w-100" aria-labelledby="dashscopeImageModelBtn" style="max-height:320px;overflow-y:auto;z-index:1055;">
+                                            <li><a class="dropdown-item d-flex justify-content-between align-items-center" href="#" data-value="wanx2.1-t2i-plus">通义万相2.1-文生图-Plus <span class="badge bg-warning text-white ms-2">限免</span></a></li>
+                                            <li><a class="dropdown-item d-flex justify-content-between align-items-center" href="#" data-value="wanx2.1-t2i-turbo">通义万相2.1-文生图-Turbo <span class="badge bg-warning text-white ms-2">限免</span></a></li>
+                                            <li><a class="dropdown-item d-flex justify-content-between align-items-center" href="#" data-value="aitryon-plus">AI试衣-Plus版 <span class="badge bg-warning text-white ms-2">限免</span></a></li>
+                                            <li><a class="dropdown-item d-flex justify-content-between align-items-center" href="#" data-value="aitryon">AI试衣-基础版 <span class="badge bg-warning text-white ms-2">限免</span></a></li>
+                                            <li><a class="dropdown-item d-flex justify-content-between align-items-center" href="#" data-value="flux-schnell">FLUX-schnell <span class="badge bg-warning text-white ms-2">限免</span></a></li>
+                                            <li><a class="dropdown-item d-flex justify-content-between align-items-center" href="#" data-value="flux-dev">FLUX-dev <span class="badge bg-warning text-white ms-2">限免</span></a></li>
+                                            <li><a class="dropdown-item d-flex justify-content-between align-items-center" href="#" data-value="wanx-v1">通义万相-文本生成图像 <span class="badge bg-warning text-white ms-2">限免</span></a></li>
+                                            <li><a class="dropdown-item d-flex justify-content-between align-items-center" href="#" data-value="wanx-virtualmodel">虚拟模特 <span class="badge bg-warning text-white ms-2">限免</span></a></li>
+                                            <li><a class="dropdown-item d-flex justify-content-between align-items-center" href="#" data-value="wanx-poster-generation-v1">创意海报生成 <span class="badge bg-warning text-white ms-2">限免</span></a></li>
+                                            <li><a class="dropdown-item d-flex justify-content-between align-items-center" href="#" data-value="wanx-sketch-to-image-lite">通义万相-涂鸦作画 <span class="badge bg-warning text-white ms-2">限免</span></a></li>
+                                            <li><a class="dropdown-item d-flex justify-content-between align-items-center" href="#" data-value="wanx-x-painting">通义万相-图像局部重绘 <span class="badge bg-warning text-white ms-2">限免</span></a></li>
+                                            <li><a class="dropdown-item d-flex justify-content-between align-items-center" href="#" data-value="wordart-semantic">WordArt锦书-文字变形 <span class="badge bg-warning text-white ms-2">限免</span></a></li>
+                                            <li><a class="dropdown-item d-flex justify-content-between align-items-center" href="#" data-value="wordart-texture">WordArt锦书-文字纹理生成 <span class="badge bg-warning text-white ms-2">限免</span></a></li>
+                                            <li><a class="dropdown-item d-flex justify-content-between align-items-center" href="#" data-value="wanx-background-generation-v2">图像背景生成 <span class="badge bg-warning text-white ms-2">限免</span></a></li>
+                                            <li><a class="dropdown-item d-flex justify-content-between align-items-center" href="#" data-value="wanx2.0-t2i-turbo">通义万相-文生图2.0-Turbo <span class="badge bg-warning text-white ms-2">限免</span></a></li>
+                                            <!-- 非限免模型 -->
+                                            <li><a class="dropdown-item" href="#" data-value="wanx-v1-0521">通义万相-文本生成图像-2024-05-21</a></li>
+                                            <li><a class="dropdown-item" href="#" data-value="stable-diffusion-3.5-large-turbo">StableDiffusion文生图模型-3.5-large-turbo</a></li>
+                                            <li><a class="dropdown-item" href="#" data-value="stable-diffusion-3.5-large">StableDiffusion文生图模型-3.5-large</a></li>
+                                            <li><a class="dropdown-item" href="#" data-value="flux-merged">FLUX-merged</a></li>
+                                            <li><a class="dropdown-item" href="#" data-value="image-erase-completion">图像擦除补全</a></li>
+                                            <li><a class="dropdown-item" href="#" data-value="image-instance-segmentation">人物实例分割</a></li>
+                                            <li><a class="dropdown-item" href="#" data-value="virtualmodel-v2">虚拟模特V2</a></li>
+                                            <li><a class="dropdown-item" href="#" data-value="shoemodel-v1">鞋靴模特</a></li>
+                                            <li><a class="dropdown-item" href="#" data-value="stable-diffusion-v1.5">StableDiffusion文生图模型-v1.5</a></li>
+                                            <li><a class="dropdown-item" href="#" data-value="stable-diffusion-xl">StableDiffusion文生图模型-xl</a></li>
+                                            <li><a class="dropdown-item" href="#" data-value="facechain-finetune">FaceChain人物形象训练</a></li>
+                                            <li><a class="dropdown-item" href="#" data-value="facechain-generation">FaceChain人物写真生成</a></li>
+                                            <li><a class="dropdown-item" href="#" data-value="facechain-facedetect">FaceChain人物图像检测</a></li>
+                                        </ul>
+                                        <input type="hidden" id="dashscope-image-model-value" value="">
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- 阿里云百炼高级参数区域单独一行，左侧与模型下拉框对齐 -->
+                            <div class="row" id="dashscope-extra-fields" style="display:none; margin-top: 10px;">
+                                <div class="col-12 col-md-6 offset-md-0" style="max-width:480px;">
+                                    <h6 style="font-weight:bold; margin-bottom:10px;">阿里云百炼高级参数</h6>
+                                    <div class="mb-2">
+                                        <label for="dashscope-positive-prompt" class="form-label">正向提示词</label>
+                                        <input type="text" class="form-control" id="dashscope-positive-prompt" placeholder="可默认留空——或输入你想要的风格/视角/景别/具体的人物（火柴人），切勿太过具体">
+                                    </div>
+                                    <div class="mb-2">
+                                        <label for="dashscope-negative-prompt" class="form-label">反向提示词</label>
+                                        <input type="text" class="form-control" id="dashscope-negative-prompt" placeholder="为空则使用默认反向提示词">
+                                    </div>
+                                    <div class="mb-2">
+                                        <label for="dashscope-image-ratio" class="form-label">图片比例</label>
+                                        <input type="text" class="form-control" id="dashscope-image-ratio" placeholder="默认4:3(1024*768)">
+                                    </div>
+                                    <div class="mb-2">
+                                        <label for="dashscope-steps" class="form-label">采集步数</label>
+                                        <input type="number" class="form-control" id="dashscope-steps" placeholder="默认25">
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="form-text">选择阿里云百炼后，请在右侧选择具体生图模型</div>
                         </div>
                         <!-- 新增：文章字数和配图数量设置 -->
                         <div class="row mb-3">
@@ -336,6 +451,16 @@
                     <!-- 发布操作 -->
                     <div class="preview-section">
                         <h6><i class="bi bi-send"></i> 发布操作</h6>
+                        <div class="form-check mb-2">
+                            <input class="form-check-input" type="checkbox" id="enable-mass-send">
+                            <label class="form-check-label" for="enable-mass-send">
+                                <i class="bi bi-broadcast"></i> 同时群发给所有粉丝
+                                <i class="bi bi-exclamation-triangle text-warning ms-1" 
+                                   data-bs-toggle="tooltip" 
+                                   data-bs-placement="top" 
+                                   title="需要微信认证开通群发接口才可以使用此功能"></i>
+                            </label>
+                        </div>
                         <div class="d-grid gap-2">
                             <button type="button" class="btn btn-warning" id="publish-article" disabled>
                                 <i class="bi bi-cloud-upload"></i> 发布到微信
@@ -400,6 +525,70 @@
         });
     </script> -->
     <script>
+        document.addEventListener('DOMContentLoaded', function() {
+  // 生图模型选择与阿里云百炼自定义下拉菜单联动
+  const imageModelSelect = document.getElementById('image-model-select');
+  const customImagePrompt = document.getElementById('custom-image-prompt');
+  const dashscopeDropdown = document.getElementById('dashscope-image-model-dropdown');
+  const dashscopeExtraFields = document.getElementById('dashscope-extra-fields');
+  if (imageModelSelect && customImagePrompt && dashscopeDropdown && dashscopeExtraFields) {
+    imageModelSelect.addEventListener('change', function() {
+      if (this.value === 'dashscope') {
+        dashscopeDropdown.style.display = '';
+        dashscopeExtraFields.style.display = '';
+        customImagePrompt.style.display = 'none';
+      } else {
+        dashscopeDropdown.style.display = 'none';
+        dashscopeExtraFields.style.display = 'none';
+        customImagePrompt.style.display = '';
+      }
+    });
+    // 页面初始时根据当前选项显示/隐藏
+    if (imageModelSelect.value === 'dashscope') {
+      dashscopeDropdown.style.display = '';
+      dashscopeExtraFields.style.display = '';
+      customImagePrompt.style.display = 'none';
+    } else {
+      dashscopeDropdown.style.display = 'none';
+      dashscopeExtraFields.style.display = 'none';
+      customImagePrompt.style.display = '';
+    }
+  }
+
+  // 监听自定义下拉菜单选项点击
+  const dashscopeDropdownMenu = document.querySelector('#dashscope-image-model-dropdown .dropdown-menu');
+  const dashscopeDropdownBtn = document.getElementById('dashscopeImageModelBtn');
+  const dashscopeImageModelValue = document.getElementById('dashscope-image-model-value');
+  if (dashscopeDropdownMenu && dashscopeDropdownBtn && dashscopeImageModelValue) {
+    dashscopeDropdownMenu.addEventListener('click', function(e) {
+      const target = e.target.closest('a[data-value]');
+      if (target) {
+        e.preventDefault();
+        const val = target.getAttribute('data-value');
+        dashscopeImageModelValue.value = val;
+        dashscopeDropdownBtn.textContent = target.textContent.replace(/\s*限免\s*$/, '');
+      }
+    });
+    // 动态调整下拉菜单宽度以适配最长文本
+    let maxWidth = dashscopeDropdownBtn.offsetWidth;
+    Array.from(dashscopeDropdownMenu.querySelectorAll('a')).forEach(a => {
+      const span = document.createElement('span');
+      span.style.visibility = 'hidden';
+      span.style.position = 'absolute';
+      span.style.whiteSpace = 'nowrap';
+      span.style.font = window.getComputedStyle(a).font;
+      span.innerHTML = a.innerHTML;
+      document.body.appendChild(span);
+      const w = span.offsetWidth + 40;
+      if (w > maxWidth) maxWidth = w;
+      document.body.removeChild(span);
+    });
+    dashscopeDropdownMenu.style.minWidth = maxWidth + 'px';
+    dashscopeDropdownBtn.style.width = maxWidth + 'px';
+    dashscopeDropdownMenu.style.width = maxWidth + 'px';
+    dashscopeDropdownMenu.parentNode.style.maxWidth = maxWidth + 'px';
+  }
+});
         // 优先用后端接口获取IP，若为127.0.0.1或内网IP则用第三方API兜底
         function isLocalIp(ip) {
             return ip === '127.0.0.1' || ip === '::1' || ip.startsWith('192.168.') || ip.startsWith('10.') || ip.startsWith('172.');
@@ -457,6 +646,103 @@
                     }
                 });
             }
+        });
+    </script>
+    <script>
+// 下拉框option角标渲染
+(function() {
+  const select = document.getElementById('dashscope-image-model');
+  if (!select) return;
+  function renderBadges() {
+    // 移除旧的自定义渲染
+    const wrapper = select.parentNode.querySelector('.custom-select-badge-wrapper');
+    if (wrapper) wrapper.remove();
+    // 创建自定义下拉列表
+    const custom = document.createElement('div');
+    custom.className = 'custom-select-badge-wrapper';
+    custom.style.position = 'relative';
+    custom.style.width = select.offsetWidth + 'px';
+    custom.style.marginTop = '-38px';
+    custom.style.pointerEvents = 'none';
+    Array.from(select.options).forEach((opt, idx) => {
+      if (opt.dataset.badge) {
+        const badge = document.createElement('span');
+        badge.className = 'badge-free';
+        badge.innerText = opt.dataset.badge;
+        badge.style.top = (6 + idx * 34) + 'px';
+        badge.style.right = '8px';
+        badge.style.position = 'absolute';
+        custom.appendChild(badge);
+      }
+    });
+    select.parentNode.appendChild(custom);
+  }
+  select.addEventListener('change', renderBadges);
+  select.addEventListener('focus', renderBadges);
+  renderBadges();
+})();
+    </script>
+    <script>
+        // 自动获取GitHub star数量
+        fetch('https://api.github.com/repos/wojiadexiaoming/AIWeChatauto')
+          .then(res => res.json())
+          .then(data => {
+            if(data && typeof data.stargazers_count === 'number') {
+              document.getElementById('star-num').textContent = data.stargazers_count;
+            } else {
+              document.getElementById('star-num').textContent = '--';
+            }
+          })
+          .catch(()=>{
+            document.getElementById('star-num').textContent = '--';
+          });
+    </script>
+    <script>
+        // 检查更新按钮逻辑
+        document.getElementById('check-update-btn').addEventListener('click', function() {
+            this.disabled = true;
+            this.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> 检查中...';
+            // 1. 获取GitHub最新release或commit
+            fetch('https://api.github.com/repos/wojiadexiaoming/AIWeChatauto/commits/main')
+              .then(res => res.json())
+              .then(data => {
+                const latestSha = data && data.sha ? data.sha : null;
+                // 2. 获取本地版本（需后端API支持）
+                fetch('/api/local_version')
+                  .then(res2 => res2.json())
+                  .then(local => {
+                    const localSha = local && local.sha ? local.sha : null;
+                    if(latestSha && localSha) {
+                      if(latestSha === localSha) {
+                        alert('当前已是最新版本！\n\n本地版本：' + localSha + '\nGitHub版本：' + latestSha);
+                      } else {
+                        if(confirm('检测到有新版本！\n\n本地版本：' + localSha + '\nGitHub版本：' + latestSha + '\n\n是否下载并自动更新？')) {
+                          // 3. 触发后端自动拉取GitHub最新代码（需后端实现）
+                          fetch('/api/update_from_github', {method:'POST'})
+                            .then(r=>r.json()).then(r=>{
+                              if(r.success){
+                                alert('更新成功，请刷新页面！');
+                                location.reload();
+                              } else if (r.needs_confirm) {
+                                if(confirm(r.message + "\n\n警告：更新将可能覆盖您的本地修改，是否强制更新？")) {
+                                    // 这里可以增加强制更新的逻辑，例如再次调用一个带force参数的API
+                                    alert('如需强制更新，请联系开发者开放此功能。');
+                                }
+                              } else{
+                                alert('更新失败：'+(r.message||'未知错误'));
+                              }
+                            }).catch(()=>alert('更新失败！'));
+                        }
+                      }
+                    } else {
+                      alert('无法获取版本信息，请稍后重试');
+                    }
+                  }).catch(()=>alert('获取本地版本失败'));
+              }).catch(()=>alert('获取GitHub最新版本失败'))
+              .finally(()=>{
+                this.disabled = false;
+                this.innerHTML = '<i class="bi bi-arrow-repeat"></i> 检查更新';
+              });
         });
     </script>
 </body>
