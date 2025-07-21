@@ -8,6 +8,8 @@ import os
 import logging
 from datetime import datetime
 from typing import Dict, Any, Optional
+import threading
+import time
 
 logger = logging.getLogger(__name__)
 
@@ -17,6 +19,7 @@ class ConfigService:
     def __init__(self, config_file: str = "config.json"):
         self.config_file = config_file
         self.default_config = self._get_default_config()
+        self._start_token_monitor_thread()
         logger.info(f"配置服务初始化完成，配置文件: {self.config_file}")
     
     def _get_default_config(self) -> Dict[str, Any]:
@@ -26,6 +29,13 @@ class ConfigService:
             "wechat_appsecret": "",
             "gemini_api_key": "",
             "gemini_model": "gemini-2.5-flash",
+            "deepseek_api_key": "",
+            "deepseek_model": "deepseek-chat",
+            "dashscope_api_key": "",
+            "dashscope_model": "qwen-turbo",
+            "pexels_api_key": "",
+            "coze_token": "",  # 新增coze令牌
+            "image_model": "gemini",  # 默认生图模型
             "author": "AI笔记",
             "content_source_url": "",
             "created_at": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
@@ -137,6 +147,37 @@ class ConfigService:
             'model': config.get('gemini_model', 'gemini-2.5-flash')
         }
     
+    def get_deepseek_config(self) -> Dict[str, str]:
+        """获取DeepSeek配置"""
+        config = self.load_config()
+        return {
+            'api_key': config.get('deepseek_api_key', ''),
+            'model': config.get('deepseek_model', 'deepseek-chat')
+        }
+    
+    def get_dashscope_config(self) -> Dict[str, str]:
+        """获取阿里云百炼配置"""
+        config = self.load_config()
+        return {
+            'api_key': config.get('dashscope_api_key', ''),
+            'model': config.get('dashscope_model', 'qwen-turbo')
+        }
+    
+    def get_pexels_config(self) -> Dict[str, str]:
+        """获取Pexels配置"""
+        config = self.load_config()
+        return {
+            'api_key': config.get('pexels_api_key', '')
+        }
+    
+    def get_coze_config(self) -> Dict[str, str]:
+        """获取Coze配置"""
+        config = self.load_config()
+        return {
+            'coze_token': config.get('coze_token', ''),
+            'coze_workflow_id': config.get('coze_workflow_id', '')
+        }
+    
     def get_author_config(self) -> Dict[str, str]:
         """获取作者配置"""
         config = self.load_config()
@@ -155,10 +196,79 @@ class ConfigService:
         gemini_config = self.get_gemini_config()
         return bool(gemini_config['api_key'])
     
+    def is_deepseek_configured(self) -> bool:
+        """检查DeepSeek是否已配置"""
+        deepseek_config = self.get_deepseek_config()
+        return bool(deepseek_config['api_key'])
+    
+    def is_dashscope_configured(self) -> bool:
+        """检查阿里云百炼是否已配置"""
+        dashscope_config = self.get_dashscope_config()
+        return bool(dashscope_config['api_key'])
+    
+    def is_pexels_configured(self) -> bool:
+        """检查Pexels是否已配置"""
+        pexels_config = self.get_pexels_config()
+        return bool(pexels_config['api_key'])
+    
     def get_config_status(self) -> Dict[str, bool]:
         """获取配置状态"""
         return {
             'wechat_configured': self.is_wechat_configured(),
             'gemini_configured': self.is_gemini_configured(),
+            'deepseek_configured': self.is_deepseek_configured(),
+            'dashscope_configured': self.is_dashscope_configured(),
+            'pexels_configured': self.is_pexels_configured(),
             'config_file_exists': os.path.exists(self.config_file)
         }
+
+    def _start_token_monitor_thread(self):
+        def monitor():
+            while True:
+                try:
+                    config = self.load_config()
+                    access_token = config.get('wechat_access_token', '')
+                    expire_time = int(config.get('wechat_access_token_expire_time', 0))
+                    now = int(time.time())
+                    remain = expire_time - now if expire_time else None
+                    try:
+                        now_str = datetime.fromtimestamp(now).strftime('%Y-%m-%d %H:%M:%S')
+                    except Exception:
+                        now_str = str(now)
+                    try:
+                        expire_str = datetime.fromtimestamp(expire_time).strftime('%Y-%m-%d %H:%M:%S') if expire_time else '无'
+                    except Exception:
+                        expire_str = str(expire_time)
+                    # logger.info(f"access_token检查: 当前时间{now_str}, 过期时间{expire_str}, 剩余{remain}秒")
+                    # 如果token快到期（2分钟内）或已过期/不存在，则刷新
+                    if (access_token and expire_time and remain <= 120) or (not access_token or not expire_time or remain <= 0):
+                        logger.info("access_token即将过期或已过期，自动刷新...")
+                        wechat_config = self.get_wechat_config()
+                        if wechat_config.get('appid') and wechat_config.get('appsecret'):
+                            try:
+                                from services.wechat_service import WeChatService
+                                ws = WeChatService()
+                                token_info = ws.get_access_token(
+                                    wechat_config['appid'],
+                                    wechat_config['appsecret']
+                                )
+                                if token_info and token_info.get('access_token'):
+                                    self.save_config({
+                                        'wechat_access_token': token_info['access_token'],
+                                        'wechat_access_token_expires_in': token_info['expires_in'],
+                                        'wechat_access_token_expire_time': token_info['expire_time'],
+                                        'wechat_access_token_expire_time_str': token_info['expire_time_str'],
+                                        'wechat_access_token_update_time': token_info['update_time']
+                                    })
+                                    logger.info("access_token自动刷新成功")
+                                else:
+                                    logger.warning("自动刷新access_token失败")
+                            except Exception as e:
+                                logger.error(f"自动刷新access_token时异常: {str(e)}")
+                        else:
+                            logger.warning("未配置appid/appsecret，无法自动刷新access_token")
+                    # 每30秒检查一次
+                    time.sleep(30)
+                except Exception as e:
+                    logger.error(f"access_token自动刷新线程异常: {str(e)}")
+                    time.sleep(60)

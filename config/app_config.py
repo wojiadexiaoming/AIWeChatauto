@@ -56,6 +56,9 @@ class AppConfig:
     GEMINI_DEFAULT_MODEL = "gemini-2.5-flash"
     GEMINI_IMAGE_MODEL = "gemini-2.0-flash-preview-image-generation"
     
+    # DeepSeek AI配置
+    DEEPSEEK_DEFAULT_MODEL = "deepseek-chat"
+    
     # 请求超时配置
     API_TIMEOUT = 60
     

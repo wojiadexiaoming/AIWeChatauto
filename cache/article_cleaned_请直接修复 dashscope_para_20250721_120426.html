@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>请直接修复 dashscope_params 未定义问题</title>
+
+</head>
+<body style="font-family: -apple-system, system-ui, BlinkMacSystemFont, 'Helvetica Neue', 'PingFang SC', 'Microsoft YaHei', sans-serif; background-color: white; margin: 0; padding: 0">
+<div class="gradient-bg center" style="background: linear-gradient(135deg, rgb(75, 108, 183) 0%, rgb(24, 40, 72) 100%); color: white; padding: 24px 16px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); margin-bottom: 20px; text-align: center">
+<h1 style="font-size: 32px; font-weight: 700; margin: 0 0 16px; line-height: 1.2; color: white">请直接修复 <span style="font-weight: 900">dashscope_params</span> 未定义问题</h1>
+<p class="desc" style="font-size: 14px; line-height: 1.6; margin: 0; color: rgb(102, 102, 102); opacity: 0.9">掌握关键排查步骤，快速解决前端或后端中 dashscope_params 未定义的常见错误。</p>
+</div>
+<div class="light-bg" style="background-color: white; padding: 24px 16px; border-radius: 12px; box-shadow: rgba(0, 0, 0, 0.05) 0px 4px 12px; margin-bottom: 20px">
+<h2 style="font-size: 24px; font-weight: 700; margin: 0 0 20px; color: rgb(24, 40, 72); position: relative">问题背景</h2>
+<p style="font-size: 16px; line-height: 1.8; margin: 0 0 16px; color: rgb(66, 66, 66)">在使用 DashScope 接口（如通义千问 API）时，开发者可能会遇到如下错误提示：</p>
+<div class="quote" style="padding: 16px; background-color: rgb(241, 247, 254); border-radius: 12px; margin: 24px 0">
+<p style="font-size: 16px; line-height: 1.8; margin: 0 0 16px; color: rgb(66, 66, 66)">ReferenceError: dashscope_params is not defined</p><p style="text-align: center; font-size: 16px; line-height: 1.8; margin: 0 0 16px; color: rgb(66, 66, 66)"><img alt="文章配图" src="cache\5ef45536-1e33-44cc-87db-c8dd080894603864093624.png" style="max-width: 100%; height: auto; width: 100%; object-fit: cover; display: block"/></p>
+</div>
+<p style="font-size: 16px; line-height: 1.8; margin: 0 0 16px; color: rgb(66, 66, 66)">这通常意味着在调用接口时，程序无法找到名为 <code>dashscope_params</code> 的变量或对象。本文将带你一步步排查并解决这个问题。</p>
+</div>
+<div class="gray-bg" style="background-color: #f8f9fa; padding: 24px 16px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); margin-bottom: 20px">
+<h2 style="font-size: 24px; font-weight: 700; margin: 0 0 20px; color: rgb(24, 40, 72); position: relative">常见原因分析</h2>
+<div class="flex-col" style="display: flex; flex-direction: column; gap: 16px; margin: 24px 0">
+<div class="left-border-blue" style="padding: 16px; background-color: rgb(245, 245, 245); border-radius: 8px; border-left: 4px solid rgb(75, 108, 183); margin-bottom: 16px">
+<h3 style="font-size: 18px; margin: 0 0 8px; color: rgb(51, 51, 51); font-weight: 700">1. 变量未定义或拼写错误</h3>
+<p style="font-size: 16px; line-height: 1.8; margin: 0 0 16px; color: rgb(66, 66, 66)">检查是否在调用接口前正确声明并初始化了 <code>dashscope_params</code>。例如：</p>
+<pre><code>const dashscope_params = { model: 'qwen-max', input: { prompt: '你好' } };</code></pre>
+</div>
+<div class="left-border-blue" style="padding: 16px; background-color: rgb(245, 245, 245); border-radius: 8px; border-left: 4px solid rgb(75, 108, 183); margin-bottom: 16px">
+<h3 style="font-size: 18px; margin: 0 0 8px; color: rgb(51, 51, 51); font-weight: 700">2. 作用域问题</h3>
+<p style="font-size: 16px; line-height: 1.8; margin: 0 0 16px; color: rgb(66, 66, 66)">确保 <code>dashscope_params</code> 在调用函数的作用域内可用。例如，在函数内部定义的变量外部无法访问。</p><p style="text-align: center; font-size: 16px; line-height: 1.8; margin: 0 0 16px; color: rgb(66, 66, 66)"><img alt="文章配图" src="cache\6bdc4574-df29-42d0-a88a-2b5e0c7ace731807576861.png" style="max-width: 100%; height: auto; width: 100%; object-fit: cover; display: block"/></p>
+</div>
+<div class="left-border-blue" style="padding: 16px; background-color: rgb(245, 245, 245); border-radius: 8px; border-left: 4px solid rgb(75, 108, 183); margin-bottom: 16px">
+<h3 style="font-size: 18px; margin: 0 0 8px; color: rgb(51, 51, 51); font-weight: 700">3. 异步加载未完成</h3>
+<p style="font-size: 16px; line-height: 1.8; margin: 0 0 16px; color: rgb(66, 66, 66)">如果 <code>dashscope_params</code> 是通过异步请求获取的，请确保调用接口前已完成赋值。</p>
+</div>
+<div class="left-border-blue" style="padding: 16px; background-color: rgb(245, 245, 245); border-radius: 8px; border-left: 4px solid rgb(75, 108, 183); margin-bottom: 16px">
+<h3 style="font-size: 18px; margin: 0 0 8px; color: rgb(51, 51, 51); font-weight: 700">4. 第三方 SDK 使用方式错误</h3>
+<p style="font-size: 16px; line-height: 1.8; margin: 0 0 16px; color: rgb(66, 66, 66)">如果你使用的是 DashScope 官方 SDK，请参考官方文档确认调用方式是否正确。</p><p style="text-align: center; font-size: 16px; line-height: 1.8; margin: 0 0 16px; color: rgb(66, 66, 66)"><img alt="文章配图" src="cache\a16706a0-1c59-4436-bb50-e7af7df933b675661610.png" style="max-width: 100%; height: auto; width: 100%; object-fit: cover; display: block"/></p>
+</div>
+</div>
+</div>
+<div class="light-bg" style="background-color: white; padding: 24px 16px; border-radius: 12px; box-shadow: rgba(0, 0, 0, 0.05) 0px 4px 12px; margin-bottom: 20px">
+<h2 style="font-size: 24px; font-weight: 700; margin: 0 0 20px; color: rgb(24, 40, 72); position: relative">解决方案示例</h2>
+<h3 style="font-size: 18px; margin: 0 0 8px; color: rgb(51, 51, 51); font-weight: 700">✅ 正确定义并使用 dashscope_params</h3>
+<pre><code>
+const dashscope_params = {
+    model: 'qwen-max',
+    input: {
+        prompt: '请帮我写一段介绍人工智能的文章'
+    }
+};
+
+fetch('https://api.dashscope.cn/api/v1/services/aigc/text-generation/generation', {
+    method: 'POST',
+    headers: {
+        'Authorization': 'Bearer YOUR_API_KEY',
+        'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(dashscope_params)
+})
+.then(response =&gt; response.json())
+.then(data =&gt; console.log(data))
+.catch(error =&gt; console.error(error));
+    </code></pre>
+</div>
+<div class="gray-bg" style="background-color: #f8f9fa; padding: 24px 16px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); margin-bottom: 20px">
+<h2 style="font-size: 24px; font-weight: 700; margin: 0 0 20px; color: rgb(24, 40, 72); position: relative">常见误区与避坑指南</h2>
+<ul>
+<li>❌ 忘记定义变量名，直接使用未声明的 <code>dashscope_params</code></li>
+<li>❌ 在函数内部定义变量，却在外部调用</li>
+<li>❌ 异步获取参数时未使用 <code>await</code> 或 <code>Promise</code> 处理逻辑</li>
+<li>❌ 拷贝粘贴代码时未修改变量名或结构</li>
+</ul>
+</div>
+<div class="light-bg" style="background-color: white; padding: 24px 16px; border-radius: 12px; box-shadow: rgba(0, 0, 0, 0.05) 0px 4px 12px; margin-bottom: 20px">
+<h2 style="font-size: 24px; font-weight: 700; margin: 0 0 20px; color: rgb(24, 40, 72); position: relative">结语</h2>
+<p class="highlight" style="font-size: 16px; line-height: 1.8; margin: 0 0 16px; font-weight: 500; color: rgb(66, 66, 66)">修复 <code>dashscope_params</code> 未定义的问题，核心在于理解变量的作用域、生命周期以及调用顺序。</p>
+<div class="center" style="text-align: center">
+<p class="end-text" style="font-size: 18px; line-height: 1.8; margin: 0; color: #182848; font-weight: 700; text-align: center">遇到问题别慌，<span style="font-size: 28px">先查变量，再看调用</span>，就能快速定位根源！</p>
+</div>
+</div>
+<div class="divider" style="width: 60px; height: 4px; background: linear-gradient(90deg, #182848 0%, #4b6cb7 100%); margin: 32px auto; border-radius: 2px"></div></body></html>

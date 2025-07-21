@@ -1,0 +1,8 @@
+Flask>=2.0
+requests>=2.25
+beautifulsoup4>=4.9
+google-generativeai>=0.5
+dashscope>=1.16
+APScheduler>=3.7
+Werkzeug>=2.0
+gunicorn 
