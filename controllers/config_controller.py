@@ -126,7 +126,8 @@ class ConfigController:
         required_fields = {
             'wechat_appid': '微信AppID',
             'wechat_appsecret': '微信AppSecret', 
-            'gemini_api_key': 'Gemini API密钥'
+            # 其他不做强制校验，coze_token 不做强制校验
+            # coze_workflow_id 不做强制校验
         }
         
         # 只验证存在且非空的字段

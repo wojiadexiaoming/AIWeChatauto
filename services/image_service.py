@@ -38,7 +38,9 @@ class ImageService:
     
     def generate_article_image(self, title: str, description: str = "", image_model: str = "gemini", 
                              article_content: str = "", ai_model: str = "gemini", 
-                             image_index: int = 1, total_images: int = 1) -> Optional[str]:
+                             image_index: int = 1, total_images: int = 1,
+                             dashscope_params: dict = None,
+                             user_custom_prompt: str = "") -> Optional[str]:
         """
         生成文章配图
         :param title: 文章标题
@@ -48,24 +50,38 @@ class ImageService:
         :param ai_model: AI模型 (gemini, deepseek, dashscope) - 用于Pexels搜索提示词生成
         :param image_index: 当前图片索引（从1开始）
         :param total_images: 总图片数量
+        :param dashscope_params: dict，阿里云百炼生图专用参数
+        :param user_custom_prompt: str，用户自定义生图提示词
         :return: 图片文件路径
         """
         try:
             logger.info(f"开始生成文章配图，标题: {title}, 生图模型: {image_model}, AI模型: {ai_model}, 图片索引: {image_index}/{total_images}")
-            
+            # 推荐逻辑：阿里云百炼/Coze如无正向提示词和自定义提示词，则用PromptManager.image_prompt生成完整提示词
+            if image_model in ["dashscope", "coze"]:
+                # 优先用用户输入
+                final_prompt = user_custom_prompt or (dashscope_params.get('positive_prompt') if dashscope_params else None)
+                if not final_prompt:
+                    final_prompt = PromptManager.image_prompt_with_style(title, description, user_custom_prompt)
+            else:
+                final_prompt = PromptManager.image_prompt_with_style(title, description, user_custom_prompt)
             if image_model == "gemini":
-                return self._generate_with_gemini(title, description)
+                return self._generate_with_gemini(final_prompt)
             elif image_model == "deepseek":
-                return self._generate_with_deepseek(title, description)
+                return self._generate_with_deepseek(final_prompt)
             elif image_model == "dashscope":
-                return self._generate_with_dashscope(title, description)
+                # 新增：支持 dashscope_params，正向提示词用统一拼接
+                if dashscope_params is None:
+                    dashscope_params = {}
+                dashscope_params['positive_prompt'] = final_prompt
+                return self._generate_with_dashscope_v2(title, description, dashscope_params)
             elif image_model == "pexels":
                 return self._search_with_pexels(title, description, article_content, ai_model, 
                                               image_index=image_index, total_images=total_images)
+            elif image_model == "coze":
+                return self._generate_with_coze(final_prompt)
             else:
                 logger.error(f"不支持的生图模型: {image_model}")
                 return None
-            
         except Exception as e:
             logger.error(f"生成文章配图时发生错误: {str(e)}")
             return None
@@ -144,6 +160,158 @@ class ImageService:
             logger.warning("阿里云百炼图片生成功能暂未实现")
             return None
             
+        except Exception as e:
+            logger.error(f"阿里云百炼生成文章配图时发生错误: {str(e)}")
+            return None
+    
+    def _generate_with_coze(self, title: str, description: str = "") -> Optional[str]:
+        """使用Coze工作流API生成图片（非流式）"""
+        try:
+            from services.config_service import ConfigService
+            import requests
+            config_service = ConfigService()
+            coze_config = config_service.get_coze_config()
+            coze_token = coze_config.get('coze_token', '')
+            workflow_id = coze_config.get('coze_workflow_id', '')
+            if not coze_token:
+                logger.error("Coze令牌未配置")
+                return None
+            if not workflow_id:
+                logger.error("Coze工作流ID未配置")
+                return None
+
+            # 这里假设workflow_id和参数需要根据实际业务调整
+            parameters = {
+                "title": title,
+                "description": description
+            }
+            url = "https://api.coze.cn/v1/workflow/run"
+            headers = {
+                "Authorization": f"Bearer {coze_token}",
+                "Content-Type": "application/json"
+            }
+            payload = {
+                "workflow_id": workflow_id,
+                "parameters": parameters
+            }
+            response = requests.post(url, headers=headers, json=payload, timeout=30)
+            if response.status_code != 200:
+                logger.error(f"Coze API请求失败，状态码: {response.status_code}, 响应: {response.text}")
+                return None
+            resp_json = response.json()
+            if resp_json.get('code') != 0:
+                logger.error(f"Coze API返回错误: {resp_json.get('msg')}")
+                return None
+            # 假设返回的data字段为JSON字符串，包含图片URL
+            import json as _json
+            data = resp_json.get('data')
+            if not data:
+                logger.error("Coze API未返回图片数据")
+                return None
+            try:
+                data_obj = _json.loads(data) if isinstance(data, str) else data
+            except Exception:
+                data_obj = data
+            image_url = data_obj.get('image_url') or data_obj.get('url') or data_obj.get('output') or data_obj.get('title') 
+            if not image_url:
+                logger.error(f"Coze返回数据未包含图片URL: {data_obj}")
+                return None
+            # 下载图片
+            from datetime import datetime
+            import os
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            safe_title = "".join(c for c in title if c.isalnum() or c in (' ', '-', '_')).rstrip()[:20]
+            filename = f"article_coze_{safe_title}_{timestamp}.jpg"
+            image_path = os.path.join(self.cache_folder, filename)
+            img_resp = requests.get(image_url, timeout=30)
+            if img_resp.status_code == 200:
+                with open(image_path, 'wb') as f:
+                    f.write(img_resp.content)
+                logger.info(f"Coze文章配图生成成功: {image_path}")
+                return image_path
+            else:
+                logger.error(f"Coze图片下载失败，状态码: {img_resp.status_code}")
+                return None
+        except Exception as e:
+            logger.error(f"Coze生成文章配图时发生错误: {str(e)}")
+            return None
+    
+    def _generate_with_dashscope_v2(self, title: str, description: str = "", dashscope_params: dict = None) -> Optional[str]:
+        """新版：使用阿里云百炼SDK生成图片，支持正/反向提示词、图片比例、采样步数等参数"""
+        try:
+            import dashscope
+            from dashscope import ImageSynthesis
+            from http import HTTPStatus
+            from urllib.parse import urlparse, unquote
+            from pathlib import PurePosixPath
+            # 参数准备
+            if not dashscope_params:
+                logger.error("未传递阿里云百炼生图参数")
+                return None
+            model_name = dashscope_params.get('model_name')
+            positive_prompt = dashscope_params.get('positive_prompt') or title
+            # 默认反向提示词
+            negative_prompt = dashscope_params.get('negative_prompt')
+            if not negative_prompt:
+                negative_prompt = "模糊, 低质量, 扭曲, 失真, 过曝, 过暗, 低分辨率, artifact, blurry, bad anatomy, bad hands, watermark, signature, text, cropped, worst quality, low quality, jpeg artifacts"
+            # 默认图片比例
+            size = dashscope_params.get('size') or '1024*768'  # 4:3
+            # 默认采样步数
+            steps = dashscope_params.get('steps')
+            if steps is None:
+                steps = 25
+            num_images = dashscope_params.get('num_images', 1)
+            seed = dashscope_params.get('seed')
+            guidance_scale = dashscope_params.get('guidance_scale')
+            output_dir = self.cache_folder
+            api_key = os.environ.get("DASHSCOPE_API_KEY")
+            if not api_key:
+                logger.error("未设置 DASHSCOPE_API_KEY 环境变量")
+                return None
+            params = {
+                "api_key": api_key,
+                "model": model_name,
+                "prompt": positive_prompt,
+                "n": num_images,
+                "size": size,
+            }
+            if negative_prompt:
+                params["negative_prompt"] = negative_prompt
+            if steps is not None:
+                params["steps"] = steps
+            if seed is not None:
+                params["seed"] = seed
+            if guidance_scale is not None:
+                params["guidance"] = guidance_scale
+            logger.info(f"DashScope生图参数: {params}")
+            try:
+                rsp = ImageSynthesis.call(**params)
+                logger.info(f"DashScope同步调用响应: {rsp}")
+                if rsp.status_code == HTTPStatus.OK:
+                    if not os.path.exists(output_dir):
+                        os.makedirs(output_dir)
+                    downloaded_urls = []
+                    for result in rsp.output.results:
+                        file_name = PurePosixPath(unquote(urlparse(result.url).path)).parts[-1]
+                        file_path = os.path.join(output_dir, file_name)
+                        try:
+                            with open(file_path, 'wb+') as f:
+                                f.write(requests.get(result.url).content)
+                            logger.info(f"图片已保存到: {file_path}")
+                            downloaded_urls.append(file_path)
+                        except Exception as e:
+                            logger.error(f"下载图片 {result.url} 失败: {e}")
+                    if downloaded_urls:
+                        return downloaded_urls[0]  # 只返回第一张
+                    else:
+                        logger.error("DashScope图片下载失败")
+                        return None
+                else:
+                    logger.error(f"DashScope同步调用失败, 状态码: {rsp.status_code}, 错误码: {getattr(rsp, 'code', None)}, 消息: {getattr(rsp, 'message', None)}")
+                    return None
+            except Exception as e:
+                logger.error(f"DashScope同步调用发生异常: {e}")
+                return None
         except Exception as e:
             logger.error(f"阿里云百炼生成文章配图时发生错误: {str(e)}")
             return None
@@ -619,3 +787,103 @@ class ImageService:
         except Exception as e:
             logger.error(f"获取缓存文件夹信息时发生错误: {str(e)}")
             return {'exists': False, 'error': str(e)}
+    
+    def _process_images_in_content(self, content: str, title: str, description: str, image_count: int, image_model: str = "gemini", ai_model: str = "gemini", custom_image_prompt: str = "", dashscope_params: dict = None, dashscope_image_model_code: str = "") -> str:
+        try:
+            logger.info(f"开始处理文章配图，计划生成{image_count}张图片（仅本地路径，不上传微信）")
+            paragraphs = content.split('</p>')
+            total_paragraphs = len(paragraphs)
+            if total_paragraphs < 2 or image_count < 1:
+                logger.warning("文章段落过少或配图数量小于1，跳过配图插入")
+                return content
+            if image_count >= total_paragraphs:
+                insert_positions = list(range(1, total_paragraphs))[:image_count]
+            else:
+                insert_positions = [round((i + 1) * total_paragraphs / (image_count + 1)) for i in range(image_count)]
+            logger.info(f"计划在第{insert_positions}段后插入配图")
+            generated_images = []
+            if dashscope_params is None:
+                dashscope_params = {}
+            for i, position in enumerate(insert_positions):
+                try:
+                    logger.info(f"生成第{i+1}张配图，使用模型: {image_model}")
+                    # 1. 提取插图位置前100字+后100字内容
+                    def extract_paragraph_content(paragraphs, pos, max_chars=100):
+                        idx = max(0, pos-1)
+                        text_before = paragraphs[idx] if idx < len(paragraphs) else ''
+                        text_after = paragraphs[idx+1] if (idx+1) < len(paragraphs) else ''
+                        import re
+                        text_before = re.sub(r'<[^>]+>', '', text_before).strip()[:max_chars]
+                        text_after = re.sub(r'<[^>]+>', '', text_after).strip()[:max_chars]
+                        return text_before + (" " if text_before and text_after else "") + text_after
+                    current_paragraph = extract_paragraph_content(paragraphs, position)
+                    # 2. 拼接系统模板+用户风格
+                    base_prompt = PromptManager.image_prompt_with_style(title, description, custom_image_prompt)
+                    # 3. 拼接段落内容
+                    full_prompt = f"{base_prompt}\n本段内容：{current_paragraph}"
+                    # 4. 用AI大模型润色生成最终prompt（所有模型都适用）
+                    ai_prompt = self._generate_prompt_with_ai(ai_model, full_prompt)
+                    # dashscope模型ID优先用dashscope_params['model_name']，否则用dashscope_image_model_code
+                    if image_model == 'dashscope':
+                        if not dashscope_params.get('model_name') and dashscope_image_model_code:
+                            dashscope_params['model_name'] = dashscope_image_model_code
+                        if not dashscope_params.get('model_name'):
+                            logger.error("阿里云百炼模型ID未传递")
+                            return content
+                    image_path = self.image_service.generate_article_image(
+                        title=title,
+                        description=description,
+                        image_model=image_model,
+                        article_content=content,
+                        ai_model=ai_model,
+                        image_index=i+1,
+                        total_images=image_count,
+                        dashscope_params=dashscope_params,
+                        user_custom_prompt=ai_prompt
+                    )
+                    if image_path:
+                        image_html = f'<img src="{image_path}" alt="文章配图" style="max-width: 100%; height: auto;">'
+                        logger.info(f"第{i+1}张配图处理完成，使用本地路径: {image_path}")
+                        generated_images.append({
+                            'local_path': image_path,
+                            'image_html': image_html,
+                            'position': position
+                        })
+                    else:
+                        logger.warning(f"第{i+1}张配图生成失败")
+                except Exception as e:
+                    logger.error(f"生成第{i+1}张配图时出错: {str(e)}")
+            processed_content = content
+            for img_info in sorted(generated_images, key=lambda x: -x['position']):
+                position = img_info['position']
+                image_html = f'<p style="text-align: center;">{img_info["image_html"]}</p>'
+                parts = processed_content.split('</p>')
+                if position < len(parts):
+                    parts.insert(position, image_html)
+                    processed_content = '</p>'.join(parts)
+                    logger.info(f"在第{position}段后插入配图")
+            logger.info(f"配图处理完成，共插入{len(generated_images)}张图片")
+            return processed_content
+        except Exception as e:
+            logger.error(f"处理配图时发生错误: {str(e)}")
+            return content  # 出错时返回原始内容
+    
+    def _generate_prompt_with_ai(self, ai_model, prompt):
+        """
+        用指定AI大模型润色/扩写生图提示词
+        """
+        try:
+            if ai_model == 'gemini':
+                from services.gemini_service import GeminiService
+                gemini = GeminiService()
+                return gemini.generate_content(prompt)
+            elif ai_model == 'deepseek':
+                from services.deepseek_service import DeepSeekService
+                deepseek = DeepSeekService()
+                return deepseek.generate_content(prompt)
+            # 可扩展更多模型
+            else:
+                return prompt
+        except Exception as e:
+            logger.error(f"AI大模型润色prompt失败: {str(e)}")
+            return prompt

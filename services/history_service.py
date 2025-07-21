@@ -27,10 +27,11 @@ class HistoryService:
         os.makedirs('data', exist_ok=True)
         os.makedirs(self.cache_dir, exist_ok=True)
     
-    def add_generation_history(self, article_data: Dict[str, Any]) -> bool:
+    def add_generation_history(self, article_data: Dict[str, Any], publish_time: str = None) -> bool:
         """
         添加文章生成历史记录
         :param article_data: 文章数据
+        :param publish_time: 定时发布时间（可选）
         :return: 是否添加成功
         """
         try:
@@ -50,7 +51,12 @@ class HistoryService:
                 'cache_files': self._find_cache_files(article_data.get('title', '')),
                 'media_id': None,
                 'publish_id': None,
-                'msg_data_id': None
+                'msg_data_id': None,
+                'publish_time': publish_time,  # 新增定时发布时间
+                'mass_sent': False,  # 新增群发状态
+                'mass_msg_id': None,  # 新增群发消息ID
+                'mass_sent_at': None,  # 新增群发时间
+                'enable_mass_send': False  # 新增定时群发设置
             }
             
             # 添加到历史记录开头
@@ -68,31 +74,55 @@ class HistoryService:
             logger.error(f"添加生成历史记录失败: {str(e)}")
             return False
     
-    def update_draft_status(self, title: str, media_id: str) -> bool:
+    def update_draft_status(self, title: str, media_id: str, publish_time: str = None) -> bool:
         """
         更新草稿保存状态
         :param title: 文章标题
         :param media_id: 微信草稿media_id
+        :param publish_time: 定时发布时间（可选）
         :return: 是否更新成功
         """
         try:
             history = self._load_history()
-            
-            # 查找匹配的历史记录（按标题和时间匹配）
+            # 优化：只要title或media_id匹配且未发布即可更新
             for item in history:
-                if item['title'] == title and item['status'] == 'generated':
+                if (item['title'] == title or (media_id and item.get('media_id') == media_id)) and item['status'] != 'published':
                     item['status'] = 'saved'
                     item['media_id'] = media_id
                     item['saved_at'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                    if publish_time:
+                        item['publish_time'] = publish_time
                     self._save_history(history)
                     logger.info(f"更新草稿状态: {title} -> media_id: {media_id}")
                     return True
-            
-            logger.warning(f"未找到匹配的生成历史记录: {title}")
+            logger.warning(f"未找到匹配的生成历史记录: {title} 或 media_id: {media_id}")
             return False
-            
         except Exception as e:
             logger.error(f"更新草稿状态失败: {str(e)}")
+            return False
+    
+    def update_draft_status_by_media_id(self, media_id: str, publish_time: str = None, enable_mass_send: bool = False) -> bool:
+        """
+        根据media_id更新定时发布时间和群发设置
+        :param media_id: 微信草稿media_id
+        :param publish_time: 定时发布时间
+        :param enable_mass_send: 是否启用定时群发
+        :return: 是否更新成功
+        """
+        try:
+            history = self._load_history()
+            for item in history:
+                if item.get('media_id') == media_id:
+                    if publish_time:
+                        item['publish_time'] = publish_time
+                    item['enable_mass_send'] = enable_mass_send
+                    self._save_history(history)
+                    logger.info(f"更新定时设置: media_id={media_id} -> publish_time: {publish_time}, 群发: {enable_mass_send}")
+                    return True
+            logger.warning(f"未找到匹配的media_id: {media_id}")
+            return False
+        except Exception as e:
+            logger.error(f"更新定时设置失败: {str(e)}")
             return False
     
     def update_publish_status(self, media_id: str, publish_data: Dict[str, Any]) -> bool:
@@ -105,15 +135,13 @@ class HistoryService:
         try:
             history = self._load_history()
             publish_history = self._load_publish_history()
-            
-            # 查找匹配的历史记录
+            # 优化：只要media_id匹配且未发布即可更新
             for item in history:
-                if item['media_id'] == media_id and item['status'] == 'saved':
+                if item.get('media_id') == media_id and item['status'] != 'published':
                     item['status'] = 'published'
                     item['publish_id'] = publish_data.get('publish_id')
                     item['msg_data_id'] = publish_data.get('msg_data_id')
                     item['published_at'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                    
                     # 添加到发布历史
                     publish_item = {
                         'id': self._generate_id(),
@@ -127,21 +155,40 @@ class HistoryService:
                         'image_count': item['image_count']
                     }
                     publish_history.insert(0, publish_item)
-                    
                     # 限制发布历史数量（保留最近50条）
                     if len(publish_history) > 50:
                         publish_history = publish_history[:50]
-                    
                     self._save_history(history)
                     self._save_publish_history(publish_history)
                     logger.info(f"更新发布状态: media_id {media_id} -> publish_id {publish_data.get('publish_id')}")
                     return True
-            
             logger.warning(f"未找到匹配的草稿记录: media_id {media_id}")
             return False
-            
         except Exception as e:
             logger.error(f"更新发布状态失败: {str(e)}")
+            return False
+    
+    def update_mass_send_status(self, publish_id: str, mass_data: Dict[str, Any]) -> bool:
+        """
+        更新群发状态
+        :param publish_id: 发布ID
+        :param mass_data: 群发结果数据
+        :return: 是否更新成功
+        """
+        try:
+            history = self._load_history()
+            for item in history:
+                if item.get('publish_id') == publish_id:
+                    item['mass_sent'] = True
+                    item['mass_msg_id'] = mass_data.get('msg_id')
+                    item['mass_sent_at'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                    self._save_history(history)
+                    logger.info(f"更新群发状态: publish_id {publish_id} -> msg_id {mass_data.get('msg_id')}")
+                    return True
+            logger.warning(f"未找到匹配的发布记录: publish_id {publish_id}")
+            return False
+        except Exception as e:
+            logger.error(f"更新群发状态失败: {str(e)}")
             return False
     
     def get_generation_history(self, limit: int = 20) -> List[Dict[str, Any]]:

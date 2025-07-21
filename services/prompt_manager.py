@@ -23,11 +23,31 @@ class PromptManager:
         return f"""{PromptManager.ROLE_PROMPT}\n请为以下文章生成一个简洁的摘要：\n\n标题：{title}\n内容预览：{content_preview}\n\n要求：\n1. 摘要长度不超过100字\n2. 概括文章的核心内容和价值\n3. 语言吸引人，能激发读者的阅读兴趣\n4. 不要包含HTML标签，纯文本即可\n5. 使用中文表达\n\n请直接输出摘要内容，不要包含任何其他说明文字："""
 
     # 生图生成提示词（Gemini/海报风格）
+    # @staticmethod
+    # def image_prompt(title, description="", user_custom=""):
+    #     if user_custom:
+    #         base_prompt = f"{PromptManager.ROLE_PROMPT}\n{user_custom}"
+    #     else:
+    #         base_prompt = f"{PromptManager.ROLE_PROMPT}\n为文章《{title}》生成一张高质量的海报风格配图。\n\n要求：\n1. 图片风格现代、简洁、专业，具有海报感\n2. 色调温和，适合微信公众号\n3. 构图美观，有设计感\n4. 与文章主题相关\n5. 图片中不要包含过多文字，最好无文字，仅以视觉元素表达主题\n6. 尺寸比例适合作为文章封面\n7. 使用中国读者喜欢的视觉元素\n"
+    #     if description:
+    #         base_prompt += f"\n\n文章描述：{description}\n请根据文章内容生成相关的视觉元素。"
+    #     return base_prompt
+
+    # 生图生成提示词（带风格）
     @staticmethod
-    def image_prompt(title, description=""):
-        base_prompt = f"""{PromptManager.ROLE_PROMPT}\n为文章《{title}》生成一张高质量的海报风格配图。\n\n要求：\n1. 图片风格现代、简洁、专业，具有海报感\n2. 色调温和，适合微信公众号\n3. 构图美观，有设计感\n4. 与文章主题相关\n5. 图片中不要包含过多文字，最好无文字，仅以视觉元素表达主题\n6. 尺寸比例适合作为文章封面\n7. 使用中国读者喜欢的视觉元素\n"""
+    def image_prompt_with_style(title, description="", user_style=""):
+        # user_style 动态替换风格/景别/运镜部分
+        base_prompt = f"为文章《{title}》生成一张高质量的配图。"
+        if user_style:
+            # 用户输入替换默认风格
+            style_line = f"图片风格：{user_style}。"
+        else:
+            style_line = "图片风格现代、简洁、专业，具有海报感。"
+        base_prompt += f"\n要求：\n1. {style_line}\n2. 色调温和，适合微信公众号\n3. 构图美观，有设计感\n4. 与文章主题相关\n5. 图片中不要包含过多文字，最好无文字，仅以视觉元素表达主题\n6. 尺寸比例适合作为文章封面\n7. 使用中国读者喜欢的视觉元素"
         if description:
             base_prompt += f"\n\n文章描述：{description}\n请根据文章内容生成相关的视觉元素。"
+        # 追加英文提示
+        base_prompt += "\n\n请用英文输出提示词。"
         return base_prompt
 
     # Pexels图片搜索AI提示词

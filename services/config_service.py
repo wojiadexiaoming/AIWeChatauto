@@ -34,6 +34,7 @@ class ConfigService:
             "dashscope_api_key": "",
             "dashscope_model": "qwen-turbo",
             "pexels_api_key": "",
+            "coze_token": "",  # 新增coze令牌
             "image_model": "gemini",  # 默认生图模型
             "author": "AI笔记",
             "content_source_url": "",
@@ -169,6 +170,14 @@ class ConfigService:
             'api_key': config.get('pexels_api_key', '')
         }
     
+    def get_coze_config(self) -> Dict[str, str]:
+        """获取Coze配置"""
+        config = self.load_config()
+        return {
+            'coze_token': config.get('coze_token', ''),
+            'coze_workflow_id': config.get('coze_workflow_id', '')
+        }
+    
     def get_author_config(self) -> Dict[str, str]:
         """获取作者配置"""
         config = self.load_config()
@@ -263,5 +272,3 @@ class ConfigService:
                 except Exception as e:
                     logger.error(f"access_token自动刷新线程异常: {str(e)}")
                     time.sleep(60)
-        t = threading.Thread(target=monitor, daemon=True)
-        t.start()

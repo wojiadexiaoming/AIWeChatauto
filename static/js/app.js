@@ -4,7 +4,7 @@
 
 // 工具类
 class Utils {
-    static showToast(message, type = 'info') {
+    static showToast(message, type = 'info', delay = 3000) {
         const toastContainer = document.getElementById('toast-container');
         if (!toastContainer) {
             Utils.createToastContainer();
@@ -13,7 +13,10 @@ class Utils {
         const toast = Utils.createToast(message, type);
         document.getElementById('toast-container').appendChild(toast);
         
-        const bsToast = new bootstrap.Toast(toast);
+        const bsToast = new bootstrap.Toast(toast, {
+            delay: delay,
+            autohide: true
+        });
         bsToast.show();
         
         // 自动移除toast元素
@@ -154,18 +157,34 @@ class ConfigManager {
     }
     
     static getConfigFormData() {
+        const wechat_appid = document.getElementById('wechat-appid')?.value || '';
+        const wechat_appsecret = document.getElementById('wechat-appsecret')?.value || '';
+        const gemini_api_key = document.getElementById('gemini-api-key')?.value || '';
+        const gemini_model = document.getElementById('gemini-model')?.value || 'gemini-2.5-flash';
+        const deepseek_api_key = document.getElementById('deepseek-api-key')?.value || '';
+        const deepseek_model = document.getElementById('deepseek-model')?.value || 'deepseek-chat';
+        const dashscope_api_key = document.getElementById('dashscope-api-key')?.value || '';
+        const dashscope_model = document.getElementById('dashscope-model')?.value || 'qwen-turbo';
+        const pexels_api_key = document.getElementById('pexels-api-key')?.value || '';
+        const coze_token = document.getElementById('coze_token')?.value || '';
+        const coze_workflow_id = document.getElementById('coze_workflow_id')?.value || '';
+        const author = document.getElementById('author-name')?.value || 'AI笔记';
+        const content_source_url = document.getElementById('content-source-url')?.value || '';
+        
         return {
-            wechat_appid: document.getElementById('wechat-appid')?.value || '',
-            wechat_appsecret: document.getElementById('wechat-appsecret')?.value || '',
-            gemini_api_key: document.getElementById('gemini-api-key')?.value || '',
-            gemini_model: document.getElementById('gemini-model')?.value || 'gemini-2.5-flash',
-            deepseek_api_key: document.getElementById('deepseek-api-key')?.value || '',
-            deepseek_model: document.getElementById('deepseek-model')?.value || 'deepseek-chat',
-            dashscope_api_key: document.getElementById('dashscope-api-key')?.value || '',
-            dashscope_model: document.getElementById('dashscope-model')?.value || 'qwen-turbo',
-            pexels_api_key: document.getElementById('pexels-api-key')?.value || '',
-            author: document.getElementById('author-name')?.value || 'AI笔记',
-            content_source_url: document.getElementById('content-source-url')?.value || ''
+            wechat_appid,
+            wechat_appsecret,
+            gemini_api_key,
+            gemini_model,
+            deepseek_api_key,
+            deepseek_model,
+            dashscope_api_key,
+            dashscope_model,
+            pexels_api_key,
+            coze_token,
+            coze_workflow_id,
+            author,
+            content_source_url
         };
     }
     
@@ -196,6 +215,12 @@ class ConfigManager {
         }
         if (document.getElementById('pexels-api-key')) {
             document.getElementById('pexels-api-key').value = config.pexels_api_key || '';
+        }
+        if (document.getElementById('coze_token')) {
+            document.getElementById('coze_token').value = config.coze_token || '';
+        }
+        if (document.getElementById('coze_workflow_id')) {
+            document.getElementById('coze_workflow_id').value = config.coze_workflow_id || '';
         }
         if (document.getElementById('author-name')) {
             document.getElementById('author-name').value = config.author || 'AI笔记';
@@ -599,6 +624,10 @@ class ArticleGenerator {
         const imageModelElement = document.getElementById('image-model-select');
         const image_model = imageModelElement ? imageModelElement.value : 'gemini';
         
+        // 获取自定义生图提示词
+        const customImagePromptElement = document.getElementById('custom-image-prompt');
+        const custom_image_prompt = customImagePromptElement ? customImagePromptElement.value.trim() : '';
+        
         // 新增：获取字数和配图数量
         const wordCountElement = document.getElementById('article-word-count');
         const imageCountElement = document.getElementById('article-image-count');
@@ -607,6 +636,27 @@ class ArticleGenerator {
         // 新增：获取参考元素HTML模板
         const formatTemplateElement = document.getElementById('format-template');
         const format_template = formatTemplateElement ? formatTemplateElement.value : '';
+
+        // 新增：阿里云百炼高级参数
+        let dashscope_params = undefined;
+        if (image_model === 'dashscope') {
+            const dashscopeImageModelValue = document.getElementById('dashscope-image-model-value').value;
+            if (!dashscopeImageModelValue) {
+                Utils.showToast('请选择阿里云百炼具体生图模型', 'warning');
+                return;
+            }
+            const positive_prompt = document.getElementById('dashscope-positive-prompt').value.trim();
+            const negative_prompt = document.getElementById('dashscope-negative-prompt').value.trim();
+            const size = document.getElementById('dashscope-image-ratio').value.trim();
+            const steps = document.getElementById('dashscope-steps').value.trim();
+            dashscope_params = {
+                model_name: dashscopeImageModelValue,
+                positive_prompt,
+                negative_prompt,
+                size,
+                steps: steps ? parseInt(steps) : undefined
+            };
+        }
         
         try {
             this.showGenerationProgress();
@@ -619,7 +669,9 @@ class ArticleGenerator {
                 image_count, 
                 format_template, 
                 ai_model,
-                image_model
+                image_model,
+                custom_image_prompt, // 新增
+                dashscope_params // 新增
             });
             
             if (response.success) {
@@ -641,29 +693,74 @@ class ArticleGenerator {
         const progressElement = document.getElementById('generation-progress');
         if (progressElement) {
             progressElement.style.display = 'block';
-            this.updateProgress(0, '开始生成...');
+            this.updateProgress(0, '正在接收生成需求...');
             
-            // 模拟进度更新
-            let progress = 0;
+            // 获取用户设置的配图数量
+            const imageCountElement = document.getElementById('image-count');
+            const imageCount = imageCountElement ? parseInt(imageCountElement.value) || 10 : 10;
+            
+            // 根据实际日志分析的工作流程定义基础步骤
+            const baseSteps = [
+                { progress: 5, text: '正在发送需求到AI服务...' },
+                { progress: 15, text: '正在生成文章内容...' },
+                { progress: 25, text: '正在生成文章摘要...' },
+                { progress: 35, text: '正在开始生成配图...' }
+            ];
+            
+            // 动态生成配图步骤
+            const imageSteps = [];
+            const imageProgressStart = 35;
+            const imageProgressEnd = 94;
+            const progressPerImage = (imageProgressEnd - imageProgressStart) / imageCount;
+            
+            for (let i = 0; i < imageCount; i++) {
+                const progress = imageProgressStart + (i + 1) * progressPerImage;
+                imageSteps.push({
+                    progress: Math.min(progress, imageProgressEnd),
+                    text: `正在生成配图...`
+                });
+            }
+            
+            // 完成步骤
+            const finalSteps = [
+                { progress: 96, text: '正在插入图片到文章...' },
+                { progress: 98, text: '正在优化文章内容...' },
+                { progress: 99, text: '正在保存生成结果...' }
+            ];
+            
+            // 合并所有步骤
+            const generationSteps = [...baseSteps, ...imageSteps, ...finalSteps];
+            
+            let currentStep = 0;
             const interval = setInterval(() => {
-                progress += Math.random() * 20;
-                if (progress >= 90) {
-                    clearInterval(interval);
-                    this.updateProgress(90, '即将完成...');
+                if (currentStep < generationSteps.length) {
+                    const step = generationSteps[currentStep];
+                    this.updateProgress(step.progress, step.text);
+                    currentStep++;
                 } else {
-                    this.updateProgress(progress, '正在生成内容...');
+                    clearInterval(interval);
+                    this.updateProgress(99, '即将完成...');
                 }
-            }, 500);
+            }, 8000); // 每800ms更新一个步骤，根据实际耗时调整
+            
+            // 保存interval引用，以便后续清除
+            this.progressInterval = interval;
         }
     }
     
     static hideGenerationProgress() {
+        // 清除进度更新interval
+        if (this.progressInterval) {
+            clearInterval(this.progressInterval);
+            this.progressInterval = null;
+        }
+        
         const progressElement = document.getElementById('generation-progress');
         if (progressElement) {
-            this.updateProgress(100, '生成完成');
+            this.updateProgress(100, '生成完成！');
             setTimeout(() => {
                 progressElement.style.display = 'none';
-            }, 1000);
+            }, 1500); // 显示完成状态1.5秒
         }
     }
     
@@ -742,18 +839,40 @@ class HistoryManager {
             
             const statusBadge = this.getStatusBadge(item.status);
             const actions = this.getHistoryActions(item);
-            
+            // 新增定时发布标记
+            let scheduleInfo = '';
+            if (item.publish_time && item.status !== 'published') {
+                scheduleInfo = `<span class='badge bg-info ms-2'>已定时: ${item.publish_time}</span>`;
+                // 如果有群发设置，显示群发标记
+                if (item.enable_mass_send) {
+                    scheduleInfo += `<span class='badge bg-warning ms-1'><i class="bi bi-broadcast"></i> 定时群发</span>`;
+                }
+            }
             historyItem.innerHTML = `
                 <div class="history-item-header">
                     <h6>${item.title}</h6>
                     ${statusBadge}
+                    ${scheduleInfo}
                 </div>
                 <p>生成时间: ${item.generated_at} | 长度: ${item.content_length}字 | 配图: ${item.image_count}张</p>
                 <p>作者: ${item.author}</p>
                 ${item.digest ? `<p class="text-muted">摘要: ${item.digest.substring(0, 100)}...</p>` : ''}
                 ${actions}
             `;
-            
+            // 新增定时发布按钮
+            const scheduleBtn = document.createElement('button');
+            scheduleBtn.className = 'btn btn-sm btn-outline-secondary me-2';
+            // 按钮禁用逻辑
+            if (item.status !== 'published') {
+                if (item.publish_time) {
+                    scheduleBtn.disabled = true;
+                    scheduleBtn.innerHTML = '<i class="bi bi-clock"></i> 已定时';
+                } else {
+                    scheduleBtn.innerHTML = '<i class="bi bi-clock"></i> 定时发布';
+                    scheduleBtn.onclick = () => HistoryManager.openScheduleDialog(item);
+                }
+                historyItem.querySelector('.history-actions').appendChild(scheduleBtn);
+            }
             historyList.appendChild(historyItem);
         });
     }
@@ -820,6 +939,11 @@ class HistoryManager {
             actions += `<button class="btn btn-sm btn-outline-warning me-2" onclick="HistoryManager.publishDraft('${item.media_id}')">
                 <i class="bi bi-send"></i> 发布
             </button>`;
+        }
+        
+        // 新增：显示群发状态
+        if (item.mass_sent) {
+            actions += `<span class="badge bg-info ms-2"><i class="bi bi-broadcast"></i> 已群发</span>`;
         }
         
         return `<div class="history-actions mt-2">${actions}</div>`;
@@ -924,6 +1048,123 @@ class HistoryManager {
         } catch (error) {
             Utils.showToast('发布失败: ' + error.message, 'error');
         }
+    }
+
+    // 新增：定时发布弹窗逻辑
+    static openScheduleDialog(item) {
+        // 创建弹窗
+        let modal = document.createElement('div');
+        modal.className = 'modal fade';
+        // 弹窗默认值：如已有定时，显示原定时时间
+        const defaultTime = item.publish_time ? item.publish_time.replace(' ', 'T') : HistoryManager.getDefaultScheduleTime();
+        modal.innerHTML = `
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">定时发布 - ${item.title}</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <label for="schedule-publish-time" class="form-label">请选择定时发布时间</label>
+                        <input type="datetime-local" class="form-control" id="schedule-publish-time" value="${defaultTime}" min="${HistoryManager.getDefaultScheduleTime()}" />
+                        <div class="form-check mt-3">
+                            <input class="form-check-input" type="checkbox" id="schedule-mass-send">
+                            <label class="form-check-label" for="schedule-mass-send">
+                                <i class="bi bi-broadcast"></i> 同时群发给所有粉丝
+                                <i class="bi bi-exclamation-triangle text-warning ms-1" 
+                                   data-bs-toggle="tooltip" 
+                                   data-bs-placement="top" 
+                                   title="需要微信认证开通群发接口才可以使用此功能"></i>
+                            </label>
+                        </div>
+                        ${item.publish_time ? `<div class='alert alert-info mt-2'>当前已定时：${item.publish_time}，可重新设置</div>` : ''}
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                        <button type="button" class="btn btn-primary" id="confirm-schedule-publish">确定定时</button>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+        const modalInstance = new bootstrap.Modal(modal);
+        modalInstance.show();
+        // 绑定确定按钮事件
+        modal.querySelector('#confirm-schedule-publish').onclick = async () => {
+            const dt = modal.querySelector('#schedule-publish-time').value;
+            const enableMassSend = modal.querySelector('#schedule-mass-send').checked;
+            if (!dt) {
+                Utils.showToast('请选择定时发布时间', 'warning');
+                return;
+            }
+            
+            // 关闭弹窗
+            modalInstance.hide();
+            
+            // 显示处理中的提示（显示5秒）
+            Utils.showToast('正在设置定时任务，请稍候...', 'info', 5000);
+            
+            // 组装article数据
+            let article = {
+                title: item.title,
+                author: item.author,
+                digest: item.digest,
+                content: '',
+                content_source_url: item.content_source_url || '',
+                thumb_media_id: '',
+                show_cover_pic: 0,
+                need_open_comment: 0,
+                only_fans_can_comment: 0
+            };
+            
+            try {
+                // 获取内容
+                const res = await ApiClient.post('/api/article-content', { cache_files: item.cache_files });
+                if (res.success) {
+                    article.content = res.data.content;
+                } else {
+                    Utils.showToast('获取文章内容失败: ' + res.message, 'error', 5000);
+                    return;
+                }
+                
+                // 先保存草稿，拿到media_id
+                let media_id = '';
+                const saveRes = await ApiClient.post('/api/save-draft', { article });
+                if (saveRes.success && saveRes.data && saveRes.data.media_id) {
+                    media_id = saveRes.data.media_id;
+                } else {
+                    Utils.showToast('保存草稿失败: ' + (saveRes.message || '未知错误'), 'error', 5000);
+                    return;
+                }
+                
+                // 调用定时发布接口
+                const resp = await ApiClient.post('/api/schedule-publish', {
+                    media_id: media_id,
+                    publish_time: dt.replace('T', ' '),
+                    draft_id: item.id,
+                    enable_mass_send: enableMassSend
+                });
+                
+                if (resp.success) {
+                    const massText = enableMassSend ? '并群发' : '';
+                    Utils.showToast(`已设置定时发布${massText}任务`, 'success', 4000);
+                    HistoryManager.loadGenerationHistory();
+                } else {
+                    Utils.showToast('定时任务添加失败: ' + (resp.msg || '未知错误'), 'error', 5000);
+                }
+            } catch (e) {
+                Utils.showToast('设置定时任务异常: ' + e.message, 'error', 5000);
+            }
+        };
+        // 关闭时移除modal
+        modal.addEventListener('hidden.bs.modal', () => {
+            document.body.removeChild(modal);
+        });
+    }
+    static getDefaultScheduleTime() {
+        // 默认定时为当前时间+10分钟
+        const now = new Date(Date.now() + 10 * 60 * 1000);
+        return now.toISOString().slice(0, 16);
     }
 }
 
@@ -1044,6 +1285,31 @@ class ArticlePreview {
                 Utils.showToast('草稿发布成功', 'success');
                 Utils.addLog('草稿发布成功');
                 
+                // 检查是否勾选了群发
+                const enableMassSend = document.getElementById('enable-mass-send')?.checked;
+                if (enableMassSend && response.data.publish_id) {
+                    Utils.showToast('正在群发给所有粉丝...', 'info');
+                    Utils.addLog('开始群发给所有粉丝');
+                    
+                    // 调用群发接口
+                    try {
+                        const massResponse = await ApiClient.post('/api/mass-send', {
+                            publish_id: response.data.publish_id
+                        });
+                        
+                        if (massResponse.success) {
+                            Utils.showToast('群发任务已提交，请等待群发完成', 'success');
+                            Utils.addLog('群发任务提交成功');
+                        } else {
+                            Utils.showToast('群发失败: ' + (massResponse.message || '未知错误'), 'error');
+                            Utils.addLog('群发失败: ' + massResponse.message);
+                        }
+                    } catch (massError) {
+                        Utils.showToast('群发异常: ' + massError.message, 'error');
+                        Utils.addLog('群发异常: ' + massError.message);
+                    }
+                }
+                
                 // 更新已发布统计
                 const publishedElement = document.getElementById('published-articles');
                 if (publishedElement) {
@@ -1162,6 +1428,8 @@ class App {
             this.bindEvents();
             this.loadInitialConfig();
             this.startTimeUpdate();
+            this.startHistoryAutoRefresh(); // 新增：自动刷新历史记录
+            this.initTooltips(); // 初始化tooltip功能
             Utils.addLog('系统初始化完成');
         } catch (error) {
             Utils.addLog('JavaScript错误: ' + error.message, 'error');
@@ -1234,6 +1502,7 @@ class App {
             });
         }
         
+        
         // 发布相关事件
         const publishBtn = document.getElementById('publish-article');
         if (publishBtn) {
@@ -1250,16 +1519,43 @@ class App {
         if (refreshPreviewBtn) {
             refreshPreviewBtn.addEventListener('click', () => ArticlePreview.refreshPreview());
         }
+
+        // Coze JSON一键复制按钮事件（改为链接点击自动复制并跳转）
+        const cozeSpaceLink = document.getElementById('coze-space-link');
+        if (cozeSpaceLink) {
+            cozeSpaceLink.addEventListener('click', function(e) {
+                e.preventDefault();
+                const json = this.getAttribute('data-json');
+                if (json) {
+                    // 现代浏览器优先
+                    if (navigator.clipboard) {
+                        navigator.clipboard.writeText(json).then(() => {
+                            Utils.showToast('已复制工作流JSON到剪贴板', 'success');
+                            window.open('https://www.coze.cn/space', '_blank');
+                        }, () => {
+                            Utils.showToast('复制失败，请手动复制', 'error');
+                            window.open('https://www.coze.cn/space', '_blank');
+                        });
+                    } else {
+                        // 兼容老浏览器
+                        const temp = document.createElement('textarea');
+                        temp.value = json;
+                        document.body.appendChild(temp);
+                        temp.select();
+                        temp.setSelectionRange(0, 99999);
+                        try {
+                            document.execCommand('copy');
+                            Utils.showToast('已复制工作流JSON到剪贴板', 'success');
+                        } catch (err) {
+                            Utils.showToast('复制失败，请手动复制', 'error');
+                        }
+                        document.body.removeChild(temp);
+                        window.open('https://www.coze.cn/space', '_blank');
+                    }
+                }
+            });
+        }
         
-        // 移除表单回车事件，防止重复触发生成文章
-        // const titleInput = document.getElementById('article-title');
-        // if (titleInput) {
-        //     titleInput.addEventListener('keypress', (e) => {
-        //         if (e.key === 'Enter') {
-        //             ArticleGenerator.generateArticle();
-        //         }
-        //     });
-        // }
     }
     
     static async loadInitialConfig() {
@@ -1289,6 +1585,45 @@ class App {
         setInterval(() => {
             Utils.updateCurrentTime();
         }, 1000);
+    }
+
+    static startHistoryAutoRefresh() {
+        setInterval(() => {
+            HistoryManager.loadGenerationHistory();
+            HistoryManager.loadPublishHistory();
+        }, 30000); // 每30秒刷新一次
+    }
+    
+    static initTooltips() {
+        // 初始化所有tooltip
+        const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+        tooltipTriggerList.map(function (tooltipTriggerEl) {
+            return new bootstrap.Tooltip(tooltipTriggerEl);
+        });
+        
+        // 监听动态添加的元素，为新的tooltip元素初始化
+        const observer = new MutationObserver((mutations) => {
+            mutations.forEach((mutation) => {
+                mutation.addedNodes.forEach((node) => {
+                    if (node.nodeType === 1) { // 元素节点
+                        const tooltips = node.querySelectorAll ? node.querySelectorAll('[data-bs-toggle="tooltip"]') : [];
+                        tooltips.forEach((tooltip) => {
+                            new bootstrap.Tooltip(tooltip);
+                        });
+                        
+                        // 如果节点本身是tooltip
+                        if (node.hasAttribute && node.hasAttribute('data-bs-toggle') && node.getAttribute('data-bs-toggle') === 'tooltip') {
+                            new bootstrap.Tooltip(node);
+                        }
+                    }
+                });
+            });
+        });
+        
+        observer.observe(document.body, {
+            childList: true,
+            subtree: true
+        });
     }
 }
 
@@ -1343,5 +1678,41 @@ document.addEventListener('DOMContentLoaded', loadStyleTemplates);
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => App.init());
 } else {
-    // App.init(); // 注释掉，避免重复初始化
+    App.init();
+}
+
+// 修改App.init，直接在函数体内合并下拉菜单和高级参数联动逻辑
+App.init = function() {
+    try {
+        Utils.addLog('初始化微信公众号AI发布系统');
+        this.bindEvents();
+        this.loadInitialConfig();
+        this.startTimeUpdate();
+        this.startHistoryAutoRefresh(); // 新增：自动刷新历史记录
+        this.initTooltips(); // 初始化tooltip功能
+        Utils.addLog('系统初始化完成');
+    } catch (error) {
+        Utils.addLog('JavaScript错误: ' + error.message, 'error');
+        console.error('Global error:', error);
+    }
+    // 生图模型选择与阿里云百炼自定义下拉菜单联动
+    const imageModelSelect = document.getElementById('image-model-select');
+    const dashscopeDropdown = document.getElementById('dashscope-image-model-dropdown');
+    const dashscopeExtraFields = document.getElementById('dashscope-extra-fields');
+    const customImagePrompt = document.getElementById('custom-image-prompt');
+    if (imageModelSelect && dashscopeDropdown && dashscopeExtraFields && customImagePrompt) {
+        function updateDashscopeFields() {
+            if (imageModelSelect.value === 'dashscope') {
+                dashscopeDropdown.style.display = '';
+                dashscopeExtraFields.style.display = '';
+                customImagePrompt.style.display = 'none';
+            } else {
+                dashscopeDropdown.style.display = 'none';
+                dashscopeExtraFields.style.display = 'none';
+                customImagePrompt.style.display = '';
+            }
+        }
+        imageModelSelect.addEventListener('change', updateDashscopeFields);
+        updateDashscopeFields();
+    }
 }

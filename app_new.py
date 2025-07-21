@@ -11,6 +11,7 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 from config.app_config import AppConfig, setup_logging
 from controllers.config_controller import ConfigController
 from controllers.article_controller import ArticleController
+from services.scheduler_service import recover_jobs_from_history
 
 # 设置日志
 logger = setup_logging()
@@ -26,6 +27,9 @@ AppConfig.create_directories()
 # 初始化控制器
 config_controller = ConfigController()
 article_controller = ArticleController()
+
+# 启动时恢复定时任务
+recover_jobs_from_history()
 
 # 设置Gemini API密钥
 os.environ['GEMINI_API_KEY'] = 'AIzaSyDBbZXB_JnMyTM9QrgOVKpQXgWnjWuvPCA'
@@ -353,6 +357,91 @@ def before_request():
     """请求前处理"""
     from flask import request
     logger.info(f"请求: {request.method} {request.path}")
+
+# 预留定时发布API接口（可后续完善）
+@app.route('/api/schedule-publish', methods=['POST'])
+def schedule_publish():
+    """定时发布接口，接收media_id和publish_time"""
+    from services.scheduler_service import add_publish_job
+    data = request.json
+    media_id = data.get('media_id')
+    publish_time = data.get('publish_time')
+    draft_id = data.get('draft_id', None)
+    enable_mass_send = data.get('enable_mass_send', False)
+    if not media_id or not publish_time:
+        return jsonify({'success': False, 'msg': '参数缺失'}), 400
+    job_id = add_publish_job(draft_id, media_id, publish_time, enable_mass_send)
+    if job_id:
+        return jsonify({'success': True, 'job_id': job_id})
+    else:
+        return jsonify({'success': False, 'msg': '定时任务添加失败'}), 500
+
+@app.route('/api/mass-send', methods=['POST'])
+def mass_send():
+    """群发接口，接收publish_id进行群发"""
+    logger.info("群发请求")
+    data = request.json
+    publish_id = data.get('publish_id')
+    if not publish_id:
+        return jsonify({'success': False, 'msg': 'publish_id参数缺失'}), 400
+    
+    try:
+        # 获取access_token
+        from services.config_service import ConfigService
+        config_service = ConfigService()
+        wx_cfg = config_service.get_wechat_config()
+        from services.wechat_service import WeChatService
+        wechat_service = WeChatService()
+        access_token_info = wechat_service.get_access_token(wx_cfg['appid'], wx_cfg['appsecret'])
+        if not access_token_info or 'access_token' not in access_token_info:
+            return jsonify({'success': False, 'msg': '获取access_token失败'}), 500
+        
+        access_token = access_token_info['access_token']
+        
+        # 调用群发接口
+        url = f"{AppConfig.WECHAT_BASE_URL}/cgi-bin/message/mass/send"
+        params = {'access_token': access_token}
+        
+        # 群发给所有粉丝
+        payload = {
+            "touser": [],  # 空数组表示群发给所有粉丝
+            "mpnews": {
+                "media_id": publish_id
+            },
+            "msgtype": "mpnews"
+        }
+        
+        response = requests.post(url, params=params, json=payload, timeout=AppConfig.API_TIMEOUT)
+        response.raise_for_status()
+        result = response.json()
+        
+        if result.get('errcode') == 0:
+            logger.info(f"群发任务提交成功，msg_id: {result.get('msg_id')}")
+            # 更新群发状态到历史记录
+            from services.history_service import HistoryService
+            history_service = HistoryService()
+            history_service.update_mass_send_status(publish_id, result)
+            return jsonify({
+                'success': True, 
+                'msg_id': result.get('msg_id'),
+                'msg_data_id': result.get('msg_data_id')
+            })
+        else:
+            error_msg = result.get('errmsg', '未知错误')
+            logger.error(f"群发失败，错误码: {result.get('errcode')}, 错误信息: {error_msg}")
+            return jsonify({'success': False, 'msg': f'群发失败: {error_msg}'}), 500
+            
+    except Exception as e:
+        logger.error(f"群发异常: {str(e)}")
+        return jsonify({'success': False, 'msg': f'群发异常: {str(e)}'}), 500
+
+@app.route('/api/local_version', methods=['GET'])
+def get_local_version():
+    return jsonify(article_controller.get_local_version())
+
+@app.route('/api/update_from_github', methods=['POST'])
+def update_from_github():
+    return jsonify(article_controller.update_from_github())
 
 if __name__ == '__main__':
     logger.info("启动微信公众号AI发布系统")
