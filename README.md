@@ -77,6 +77,8 @@ python main.py
 ## 🏆 贡献与交流
 
 - 欢迎提交 Issue、PR，或加入交流群共同完善项目！
+- ![微信图片_2025-07-13_190348_328](https://github.com/user-attachments/assets/9bb6bd37-6be1-467d-923d-c464e43640a4)
+
 - 商业授权/定制开发请联系：**[ming7466464@gmail.com/1576129288@qq.com]**
 
 ---
@@ -90,5 +92,15 @@ MIT License
 ---
 
 如需更详细的功能演示、模板预览、二次开发文档等，可随时联系作者！ 
+![微信图片_2025-07-13_190348_328](https://github.com/user-attachments/assets/49ec38ff-2321-4c07-953f-59d685b2f682)
+
 
 打赏支持：
+
+<img width="335" height="457" alt="微信图片_2025-07-13_185602_630" src="https://github.com/user-attachments/assets/8cbe8d7b-a5ba-4d3c-bc3b-dd449743e22b" />
+
+![微信图片_2025-07-13_185558_797](https://github.com/user-attachments/assets/fdb26494-4b49-4c01-b5cf-d415a2e5c8db)
+
+
+
+
