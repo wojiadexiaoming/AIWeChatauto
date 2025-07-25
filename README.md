@@ -4,6 +4,8 @@
 > 🚀 一站式AI写作、智能配图、极致排版、自动发布，助力新媒体人高效运营公众号！
 
 ---
+<img width="1115" height="628" alt="图片" src="https://github.com/user-attachments/assets/f8474d29-af77-4f24-8b8f-fee88abe30b8" />
+
 
 ## ✨ 项目亮点
 
@@ -23,6 +25,8 @@
 - **多平台热点采集与智能选题**
   - 支持抖音、快手、B站、微博、X（推特）、TikTok、YouTube、知乎等主流平台，一键抓取行业最新热点。
   - 自动分析平台热榜，结合行业趋势，AI智能生成爆款标题，助力内容精准选题。
+    
+<img width="621" height="652" alt="wechat_2025-07-25_092906_078" src="https://github.com/user-attachments/assets/ba407b20-4eac-4174-9e32-21c13e1194cf" />
 
 - **多模型AI写作引擎**
   - 集成 Gemini、DeepSeek、阿里云百炼等顶级大模型，随心切换，满足不同风格与场景需求。
@@ -31,6 +35,8 @@
 - **智能配图与极致排版**
   - 支持 Pexels 图库、AI生图，自动适配微信防盗链，图片风格可选，视觉效果专业。
   - 内置多套精美排版模板，自动内联样式，完美适配微信 Webview，提升阅读体验。
+    
+<img width="605" height="539" alt="wechat_2025-07-25_092841_758" src="https://github.com/user-attachments/assets/a8cac394-9fd9-4ff7-861d-285196e0a1e4" />
 
 - **全流程自动化：草稿、历史、定时、一键发布**
   - 草稿管理、历史追溯、定时发布、自动推送，极致提升内容生产与运营效率。
@@ -87,7 +93,7 @@
 
 ## ⚡ 快速体验
 
-### 1. 本地开发模式
+### 1. 本地开发模式【适用于第一版】
 ```bash
 git clone https://github.com/wojiadexiaoming/AIWeChatauto.git
 cd CodeStash
